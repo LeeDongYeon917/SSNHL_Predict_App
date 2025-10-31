@@ -34,10 +34,9 @@ def get_drive_service():
     """Google Drive 서비스 객체 생성"""
     try:
         # Streamlit Cloud에서는 st.secrets 사용
-        if 'GOOGLE_SERVICE_ACCOUNT' in st.secrets:
-            service_account_info = json.loads(st.secrets['GOOGLE_SERVICE_ACCOUNT'])
+        if 'google' in st.secrets:
+            service_account_info = st.secrets['google']
         else:
-            # 로컬 테스트용
             st.error("Google Drive 서비스 계정 정보가 설정되지 않았습니다.")
             return None
         

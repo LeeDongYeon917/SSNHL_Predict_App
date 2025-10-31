@@ -58,22 +58,34 @@ def download_file_from_drive(file_name, file_type='file'):
         return None
 
     def find_file_recursively(folder_id, target_name):
-        """하위 폴더까지 재귀적으로 파일 탐색"""
-        # 현재 폴더에서 검색
-        query = f"'{folder_id}' in parents and name='{target_name}'"
-        results = service.files().list(q=query, fields="files(id, name, mimeType)").execute()
-        files = results.get('files', [])
+        """하위 폴더까지 재귀적으로 파일 탐색 (모든 MIME type 포함)"""
+        # 현재 폴더에서 파일 검색
+        query = f"'{folder_id}' in parents and name='{target_name}' and trashed=false"
+        results = (
+            service.files()
+            .list(q=query, fields="files(id, name, mimeType)")
+            .execute()
+        )
+        files = results.get("files", [])
         if files:
-            return files[0]['id']
+            return files[0]["id"]
 
-        # 하위 폴더 순회
-        subfolders_query = f"'{folder_id}' in parents and mimeType='application/vnd.google-apps.folder'"
-        subfolders = service.files().list(q=subfolders_query, fields="files(id, name)").execute().get('files', [])
+        # 하위 폴더 탐색
+        subfolders_query = f"'{folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+        subfolders = (
+            service.files()
+            .list(q=subfolders_query, fields="files(id, name)")
+            .execute()
+            .get("files", [])
+        )
+
         for subfolder in subfolders:
-            found = find_file_recursively(subfolder['id'], target_name)
+            found = find_file_recursively(subfolder["id"], target_name)
             if found:
                 return found
+
         return None
+
 
     try:
         # 파일명에서 실제 이름만 추출
@@ -183,6 +195,11 @@ def load_predictor_modules():
     # sys.path에 추가
     if temp_dir not in sys.path:
         sys.path.insert(0, temp_dir)
+
+    # predictors 폴더를 직접 추가 (중요)
+    predictors_path = os.path.join(temp_dir, 'predictors')
+    if predictors_path not in sys.path:
+        sys.path.insert(0, predictors_path)
     
     return temp_dir
 
@@ -205,6 +222,11 @@ def load_preprocessing_and_translation():
     if temp_dir not in sys.path:
         sys.path.insert(0, temp_dir)
     
+    # predictors 폴더를 직접 추가 (중요)
+    predictors_path = os.path.join(temp_dir, 'predictors')
+    if predictors_path not in sys.path:
+        sys.path.insert(0, predictors_path)
+
     # 모듈 import
     try:
         from preprocessing import load_and_process_data, impute_data, finalize_data

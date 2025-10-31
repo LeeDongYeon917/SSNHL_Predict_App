@@ -154,29 +154,28 @@ def load_predictor_modules():
     """Google Drive에서 predictor 모듈 로드"""
     predictor_files = [
         'predictors/all.py',
-        'predictors/wonju.py', 
+        'predictors/wonju.py',
         'predictors/sev.py',
         'predictors/hallym.py',
         'predictors/jeju.py',
         'predictors/hagen.py'
     ]
-    
-    # predictors 디렉토리 생성
+
     temp_dir = tempfile.mkdtemp()
-        # ✅ sys.path에 미리 추가 (중요)
+
+    # ✅ sys.path에 미리 추가
     if temp_dir not in sys.path:
         sys.path.insert(0, temp_dir)
+
     predictors_dir = os.path.join(temp_dir, 'predictors')
     if predictors_dir not in sys.path:
         sys.path.insert(0, predictors_dir)
 
-    predictors_dir = os.path.join(temp_dir, 'predictors')
     os.makedirs(predictors_dir, exist_ok=True)
-    
-    # __init__.py 생성
+
     with open(os.path.join(predictors_dir, '__init__.py'), 'w') as f:
         f.write('')
-    
+
     # 각 predictor 파일 다운로드
     for file_path in predictor_files:
         file_content = download_file_from_drive(file_path)
@@ -186,6 +185,21 @@ def load_predictor_modules():
             local_path = os.path.join(predictors_dir, file_name)
             with open(local_path, 'wb') as f:
                 f.write(file_content.read())
+
+    # ✅ predictors 모듈 등록
+    import importlib.util
+    sys.path.insert(0, predictors_dir)
+
+    if 'predictors' not in sys.modules:
+        spec = importlib.util.spec_from_file_location(
+            "predictors",
+            os.path.join(predictors_dir, "__init__.py")
+        )
+        predictors_module = importlib.util.module_from_spec(spec)
+        sys.modules["predictors"] = predictors_module
+
+    return predictors_dir
+
 
 
 @st.cache_resource

@@ -27,7 +27,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
 # Google Drive 설정
-FOLDER_ID = '1rTMoyzj1gxc8ET5648XvF0E-3oN46lel'
+FOLDER_ID = '1rTMoyzj1qxc8ET5648XvF0E-3oN46lel'
 
 @st.cache_resource
 def get_drive_service():

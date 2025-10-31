@@ -196,10 +196,9 @@ def load_predictor_modules():
         predictors_module = importlib.util.module_from_spec(spec)
         sys.modules["predictors"] = predictors_module
 
-    # ✅ predictors 디렉토리 경로 반환 직전에 추가
-    nested_predictors_dir = os.path.join(predictors_dir, "predictors")
-    if os.path.exists(nested_predictors_dir):
-        predictors_dir = nested_predictors_dir
+     parent_dir = os.path.dirname(predictors_dir)
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)   
 
     return predictors_dir
 

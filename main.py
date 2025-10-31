@@ -244,10 +244,20 @@ with st.spinner("Google Drive에서 파일을 로드하는 중..."):
     # predictor 모듈 로드
     predictor_dir = load_predictor_modules()
 
-    # ✅ predictor 모듈 import 강제 등록
+    # ✅ predictors 모듈 동적 import
     import importlib
-    sys.path.insert(0, predictor_dir)
-    import predictors.all
+    import sys, os
+
+    if predictor_dir not in sys.path:
+        sys.path.insert(0, predictor_dir)
+
+    try:
+        predictors_all = importlib.import_module("predictors.all")
+        st.success("✅ predictors.all 모듈 로드 완료")
+    except ModuleNotFoundError as e:
+        st.error(f"❌ Predictor 모듈 로드 실패: {e}")
+        st.stop()
+
     
     # 모델 로드
     models = load_models_from_drive()

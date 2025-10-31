@@ -161,22 +161,18 @@ def load_predictor_modules():
         'predictors/hagen.py'
     ]
 
+    import tempfile, os, sys, importlib.util
+
+    # ✅ 임시 디렉토리 생성
     temp_dir = tempfile.mkdtemp()
-
-    # ✅ sys.path에 미리 추가
-    if temp_dir not in sys.path:
-        sys.path.insert(0, temp_dir)
-
     predictors_dir = os.path.join(temp_dir, 'predictors')
-    if predictors_dir not in sys.path:
-        sys.path.insert(0, predictors_dir)
-
     os.makedirs(predictors_dir, exist_ok=True)
 
+    # ✅ __init__.py 파일 생성
     with open(os.path.join(predictors_dir, '__init__.py'), 'w') as f:
         f.write('')
 
-    # 각 predictor 파일 다운로드
+    # ✅ predictor 파일 다운로드
     for file_path in predictor_files:
         file_content = download_file_from_drive(file_path)
         if file_content:
@@ -186,19 +182,23 @@ def load_predictor_modules():
             with open(local_path, 'wb') as f:
                 f.write(file_content.read())
 
-    # ✅ predictors 모듈 등록
-    import importlib.util
-    sys.path.insert(0, predictors_dir)
+    # ✅ sys.path에 predictor 경로 추가
+    if temp_dir not in sys.path:
+        sys.path.insert(0, temp_dir)
+    if predictors_dir not in sys.path:
+        sys.path.insert(0, predictors_dir)
 
+    # ✅ predictors 패키지 등록
     if 'predictors' not in sys.modules:
         spec = importlib.util.spec_from_file_location(
-            "predictors",
-            os.path.join(predictors_dir, "__init__.py")
+            "predictors", os.path.join(predictors_dir, "__init__.py")
         )
         predictors_module = importlib.util.module_from_spec(spec)
         sys.modules["predictors"] = predictors_module
 
+    # ✅ predictors 디렉토리 경로 리턴
     return predictors_dir
+
 
 
 
@@ -243,6 +243,11 @@ with st.spinner("Google Drive에서 파일을 로드하는 중..."):
     
     # predictor 모듈 로드
     predictor_dir = load_predictor_modules()
+
+    # ✅ predictor 모듈 import 강제 등록
+    import importlib
+    sys.path.insert(0, predictor_dir)
+    import predictors.all
     
     # 모델 로드
     models = load_models_from_drive()

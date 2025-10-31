@@ -1,39 +1,32 @@
 import streamlit as st
+# 🚨 캐시 완전 초기화
+st.cache_resource.clear()
+st.write("✅ Streamlit cache cleared")
+
 # -*- coding: utf-8 -*-
 import pandas as pd
 import numpy as np
-import os
-import joblib
-import datetime
-import traceback
-import shap
-import re
+import os, sys, io, re, joblib, tempfile, json, datetime, traceback, shap, importlib
 import matplotlib
-matplotlib.rc('font', family='Malgun Gothic')  # 윈도우: 맑은 고딕
+matplotlib.rc('font', family='Malgun Gothic')
 import matplotlib.pyplot as plt
-from matplotlib.table import Table
-import importlib
-import sys
-import io
 from PIL import Image, ImageDraw, ImageFont
-from PIL import Image as PILImage
-from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
-import tempfile
-import json
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
-# Google Drive 설정
+# ======================
+# 🔹 Google Drive 설정
+# ======================
 FOLDER_ID = '1rTMoyzj1qxc8ET5648XvF0E-3oN46lel'
 
 @st.cache_resource
 def get_drive_service():
     """Google Drive 서비스 객체 생성"""
     try:
-        # Streamlit Cloud에서는 st.secrets 사용
         if 'google' in st.secrets:
             service_account_info = st.secrets['google']
         else:
@@ -44,191 +37,112 @@ def get_drive_service():
             service_account_info,
             scopes=['https://www.googleapis.com/auth/drive.readonly']
         )
-        service = build('drive', 'v3', credentials=credentials)
-        return service
+        return build('drive', 'v3', credentials=credentials)
     except Exception as e:
         st.error(f"Google Drive 서비스 초기화 실패: {str(e)}")
         return None
 
 @st.cache_data
-def download_file_from_drive(file_name, file_type='file'):
+def download_file_from_drive(file_name):
     """Google Drive에서 파일 다운로드 (하위 폴더까지 탐색 지원)"""
     service = get_drive_service()
     if not service:
         return None
 
     def find_file_recursively(folder_id, target_name):
-        """하위 폴더까지 재귀적으로 파일 탐색 (Drive API 500 오류 대비 안정화 버전)"""
+        query = f"'{folder_id}' in parents and name='{target_name}' and trashed=false"
         try:
-            # 현재 폴더에서 파일 검색
-            query = f"'{folder_id}' in parents and name='{target_name}' and trashed=false"
-            results = (
-                service.files()
-                .list(q=query, fields="files(id, name, mimeType)")
-                .execute()
-            )
+            results = service.files().list(q=query, fields="files(id, name, mimeType)").execute()
             files = results.get("files", [])
             if files:
                 return files[0]["id"]
-
-            # 하위 폴더 검색 (500 오류 대비)
-            subfolders_query = (
-                f"'{folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            subfolders = (
+                service.files()
+                .list(q=f"'{folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",
+                      fields="files(id, name)")
+                .execute()
+                .get("files", [])
             )
-            try:
-                subfolders = (
-                    service.files()
-                    .list(q=subfolders_query, fields="files(id, name)")
-                    .execute()
-                    .get("files", [])
-                )
-            except Exception as e:
-                st.warning(f"하위 폴더 탐색 중 오류 발생 (무시하고 계속): {str(e)}")
-                subfolders = []
-
-            # 하위 폴더 재귀 탐색
-            for subfolder in subfolders:
-                found = find_file_recursively(subfolder["id"], target_name)
+            for sub in subfolders:
+                found = find_file_recursively(sub["id"], target_name)
                 if found:
                     return found
-
             return None
-
         except Exception as e:
-            st.error(f"파일 탐색 중 예외 발생 (폴더 ID={folder_id}): {str(e)}")
+            st.warning(f"파일 탐색 중 오류 발생: {e}")
             return None
 
+    file_id = find_file_recursively(FOLDER_ID, file_name)
+    if not file_id:
+        st.warning(f"❌ Google Drive에서 {file_name}을(를) 찾을 수 없습니다.")
+        return None
 
+    try:
+        request = service.files().get_media(fileId=file_id)
+        file_io = io.BytesIO()
+        downloader = MediaIoBaseDownload(file_io, request)
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+        file_io.seek(0)
+        return file_io
+    except Exception as e:
+        st.error(f"파일 다운로드 실패 ({file_name}): {str(e)}")
+        return None
 
-@st.cache_resource
-def load_models_from_drive():
-    """Google Drive에서 모델 파일들 로드"""
-    models = {}
-    predictors_module = {}
-    
-    # 모델 파일 목록
-    model_files = {
-        'all': [
-            'models/lgbm_model_all.joblib',
-            'models/xgb_model_all.joblib'
-        ],
-        'wonju': [
-            'models/lgbm_model_wonju.joblib',
-            'models/xgb_model_wonju.joblib'
-        ],
-        'sev': [
-            'models/lgbm_model_sev.joblib',
-            'models/xgb_model_sev.joblib'
-        ],
-        'hallym': [
-            'models/lgbm_model_hallym.joblib',
-            'models/xgb_model_hallym.joblib'
-        ],
-        'jeju': [
-            'models/lgbm_model_jeju.joblib',
-            'models/xgb_model_jeju.joblib'
-        ],
-        'hagen': [
-            'models/lgbm_model_hagen.joblib',
-            'models/xgb_model_hagen.joblib'
-        ]
-    }
-    
-    # 모델 다운로드 및 로드
-    for hospital, files in model_files.items():
-        models[hospital] = {}
-        for file_path in files:
-            model_type = 'lgbm' if 'lgbm' in file_path else 'xgb'
-            file_content = download_file_from_drive(file_path)
-            if file_content:
-                try:
-                    file_content.seek(0)
-                    models[hospital][model_type] = joblib.load(file_content)
-                except Exception as e:
-                    st.error(f"모델 로드 실패 ({file_path}): {str(e)}")
-    
-    return models
-
+# ======================
+# 🔹 predictor 모듈 로드
+# ======================
 @st.cache_resource
 def load_predictor_modules():
-    """Google Drive에서 predictor 모듈 로드"""
     predictor_files = [
-        'predictors/all.py',
-        'predictors/wonju.py',
-        'predictors/sev.py',
-        'predictors/hallym.py',
-        'predictors/jeju.py',
-        'predictors/hagen.py'
+        'predictors/all.py', 'predictors/wonju.py', 'predictors/sev.py',
+        'predictors/hallym.py', 'predictors/jeju.py', 'predictors/hagen.py'
     ]
-
-    import tempfile, os, sys, importlib.util
-
-    # ✅ 임시 디렉토리 생성
     temp_dir = tempfile.mkdtemp()
     predictors_dir = os.path.join(temp_dir, 'predictors')
     os.makedirs(predictors_dir, exist_ok=True)
 
-    # ✅ __init__.py 파일 생성
     with open(os.path.join(predictors_dir, '__init__.py'), 'w') as f:
         f.write('')
 
-    # ✅ predictor 파일 다운로드
     for file_path in predictor_files:
-        file_content = download_file_from_drive(file_path)
-        if file_content:
-            file_content.seek(0)
-            file_name = os.path.basename(file_path)
-            local_path = os.path.join(predictors_dir, file_name)
-            with open(local_path, 'wb') as f:
-                f.write(file_content.read())
+        content = download_file_from_drive(file_path)
+        if content:
+            with open(os.path.join(predictors_dir, os.path.basename(file_path)), 'wb') as f:
+                f.write(content.read())
+        else:
+            st.warning(f"⚠️ {file_path} 다운로드 실패")
 
-    # ✅ sys.path에 predictor 경로 추가
-    if temp_dir not in sys.path:
-        sys.path.insert(0, temp_dir)
-    if predictors_dir not in sys.path:
-        sys.path.insert(0, predictors_dir)
+    if 'predictors' in sys.modules:
+        del sys.modules['predictors']
 
-    # ✅ predictors 패키지 등록
-    if 'predictors' not in sys.modules:
-        spec = importlib.util.spec_from_file_location(
-            "predictors", os.path.join(predictors_dir, "__init__.py")
-        )
-        predictors_module = importlib.util.module_from_spec(spec)
-        sys.modules["predictors"] = predictors_module
+    sys.path = [p for p in sys.path if 'predictors' not in p]
+    parent_dir = os.path.dirname(predictors_dir)
+    sys.path.insert(0, parent_dir)
+    sys.path.insert(0, predictors_dir)
 
-        parent_dir = os.path.dirname(predictors_dir)
-        if parent_dir not in sys.path:
-            sys.path.insert(0, parent_dir)   
-
+    st.write("📁 predictors_dir:", predictors_dir)
+    st.write("📦 sys.path 상위 3개:", sys.path[:3])
+    st.write("📄 predictors 안의 파일:", os.listdir(predictors_dir))
     return predictors_dir
 
-
-
-
-
+# ======================
+# 🔹 preprocessing / translation
+# ======================
 @st.cache_resource
 def load_preprocessing_and_translation():
-    """preprocessing.py와 translate_texts.py 로드"""
     files = ['preprocessing.py', 'translate_texts.py']
-    modules = {}
-    
     temp_dir = tempfile.mkdtemp()
-        # ✅ sys.path에 미리 추가 (중요)
     if temp_dir not in sys.path:
         sys.path.insert(0, temp_dir)
-    predictors_path = os.path.join(temp_dir, 'predictors')
-    if predictors_path not in sys.path:
-        sys.path.insert(0, predictors_path)
 
-    
-    for file_name in files:
-        file_content = download_file_from_drive(file_name)
-        if file_content:
-            local_path = os.path.join(temp_dir, file_name)
-            with open(local_path, 'wb') as f:
-                f.write(file_content.read())
+    for f in files:
+        content = download_file_from_drive(f)
+        if content:
+            with open(os.path.join(temp_dir, f), 'wb') as w:
+                w.write(content.read())
 
-    # 모듈 import
     try:
         from preprocessing import load_and_process_data, impute_data, finalize_data
         from translate_texts import texts_ko, texts_en_us, texts_ja, texts_zh, texts_es, texts_de, texts_hi, texts_ar
@@ -237,34 +151,92 @@ def load_preprocessing_and_translation():
         st.error(f"모듈 로드 실패: {str(e)}")
         return False
 
-# Google Drive에서 필요한 파일들 로드
+# ======================
+# 🔹 모델 파일 로드 함수
+# ======================
+@st.cache_resource
+def load_models_from_drive():
+    """Google Drive에서 모델 파일 로드"""
+    model_files = {
+        "all": {
+            "lgbm": "models/all_lightgbm_model.joblib",
+            "xgb": "models/all_xgboost_model.joblib",
+            "scaler": "models/all_minmax_scaler.joblib"
+        },
+        "wonju": {
+            "lgbm": "models/ys_lightgbm_model.joblib",
+            "xgb": "models/ys_xgboost_model.joblib",
+            "scaler": "models/ys_minmax_scaler.joblib"
+        },
+        "sev": {
+            "lgbm": "models/sv_lightgbm_model.joblib",
+            "xgb": "models/sv_xgboost_model.joblib",
+            "scaler": "models/sv_minmax_scaler.joblib"
+        },
+        "hallym": {
+            "lgbm": "models/hm_lightgbm_model.joblib",
+            "xgb": "models/hm_xgboost_model.joblib",
+            "scaler": "models/hm_minmax_scaler.joblib"
+        },
+        "jeju": {
+            "lgbm": "models/jj_lightgbm_model.joblib",
+            "xgb": "models/jj_xgboost_model.joblib",
+            "scaler": "models/jj_minmax_scaler.joblib"
+        },
+        "hagen": {
+            "lgbm": "models/de_lightgbm_model.joblib",
+            "xgb": "models/de_xgboost_model.joblib",
+            "scaler": "models/de_minmax_scaler.joblib"
+        },
+    }
+
+    loaded_models = {}
+    for hospital, paths in model_files.items():
+        loaded_models[hospital] = {}
+        for model_type, path in paths.items():
+            try:
+                content = download_file_from_drive(path)
+                if content:
+                    tmp = tempfile.NamedTemporaryFile(delete=False)
+                    tmp.write(content.read())
+                    tmp.close()
+                    loaded_models[hospital][model_type] = joblib.load(tmp.name)
+                    st.success(f"✅ {hospital} {model_type} 모델 로드 완료")
+                else:
+                    st.warning(f"⚠️ {hospital} {model_type} 모델 없음")
+            except Exception as e:
+                st.error(f"❌ {hospital} {model_type} 로드 실패: {e}")
+
+    return loaded_models
+
+# ======================
+# 🔹 메인 실행 (파일 로드)
+# ======================
 with st.spinner("Google Drive에서 파일을 로드하는 중..."):
-    # preprocessing과 translation 모듈 로드
     modules_loaded = load_preprocessing_and_translation()
     if not modules_loaded:
-        st.error("필수 모듈을 로드할 수 없습니다.")
+        st.error("필수 모듈 로드 실패")
         st.stop()
-    
-    # predictor 모듈 로드
+
     predictor_dir = load_predictor_modules()
 
-    # ✅ predictors 모듈 동적 import
-    import importlib
-    import sys, os
-
-    if predictor_dir not in sys.path:
-        sys.path.insert(0, predictor_dir)
+    # ✅ predictors import (강제 캐시 초기화 + 디버그)
+    if 'predictors' in sys.modules:
+        del sys.modules['predictors']
+    sys.path.insert(0, predictor_dir)
 
     try:
         predictors_all = importlib.import_module("predictors.all")
         st.success("✅ predictors.all 모듈 로드 완료")
     except ModuleNotFoundError as e:
-        st.error(f"❌ Predictor 모듈 로드 실패: {e}")
-        st.stop()
+        st.warning(f"⚠️ Predictor 모듈 로드 실패: {e}")
+        predictors_all = None
 
-    
-    # 모델 로드
+    # ✅ 모델 로드
     models = load_models_from_drive()
+
+# 이후의 UI / 예측 파트는 그대로 유지
+
 
 # 이제 import 가능
 from preprocessing import load_and_process_data, impute_data, finalize_data

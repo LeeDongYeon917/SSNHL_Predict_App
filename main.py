@@ -58,58 +58,46 @@ def download_file_from_drive(file_name, file_type='file'):
         return None
 
     def find_file_recursively(folder_id, target_name):
-        """하위 폴더까지 재귀적으로 파일 탐색 (모든 MIME type 포함)"""
-        # 현재 폴더에서 파일 검색
-        query = f"'{folder_id}' in parents and name='{target_name}' and trashed=false"
-        results = (
-            service.files()
-            .list(q=query, fields="files(id, name, mimeType)")
-            .execute()
-        )
-        files = results.get("files", [])
-        if files:
-            return files[0]["id"]
+        """하위 폴더까지 재귀적으로 파일 탐색 (Drive API 500 오류 대비 안정화 버전)"""
+        try:
+            # 현재 폴더에서 파일 검색
+            query = f"'{folder_id}' in parents and name='{target_name}' and trashed=false"
+            results = (
+                service.files()
+                .list(q=query, fields="files(id, name, mimeType)")
+                .execute()
+            )
+            files = results.get("files", [])
+            if files:
+                return files[0]["id"]
 
-        # 하위 폴더 탐색
-        subfolders_query = f"'{folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
-        subfolders = (
-            service.files()
-            .list(q=subfolders_query, fields="files(id, name)")
-            .execute()
-            .get("files", [])
-        )
+            # 하위 폴더 검색 (500 오류 대비)
+            subfolders_query = (
+                f"'{folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            )
+            try:
+                subfolders = (
+                    service.files()
+                    .list(q=subfolders_query, fields="files(id, name)")
+                    .execute()
+                    .get("files", [])
+                )
+            except Exception as e:
+                st.warning(f"하위 폴더 탐색 중 오류 발생 (무시하고 계속): {str(e)}")
+                subfolders = []
 
-        for subfolder in subfolders:
-            found = find_file_recursively(subfolder["id"], target_name)
-            if found:
-                return found
+            # 하위 폴더 재귀 탐색
+            for subfolder in subfolders:
+                found = find_file_recursively(subfolder["id"], target_name)
+                if found:
+                    return found
 
-        return None
-
-
-    try:
-        # 파일명에서 실제 이름만 추출
-        target_name = os.path.basename(file_name)
-        file_id = find_file_recursively(FOLDER_ID, target_name)
-        if not file_id:
-            st.error(f"파일을 찾을 수 없습니다: {file_name}")
             return None
 
-        # 파일 다운로드
-        request = service.files().get_media(fileId=file_id)
-        file_content = io.BytesIO()
-        downloader = MediaIoBaseDownload(file_content, request)
+        except Exception as e:
+            st.error(f"파일 탐색 중 예외 발생 (폴더 ID={folder_id}): {str(e)}")
+            return None
 
-        done = False
-        while not done:
-            status, done = downloader.next_chunk()
-
-        file_content.seek(0)
-        return file_content
-
-    except Exception as e:
-        st.error(f"파일 다운로드 실패 ({file_name}): {str(e)}")
-        return None
 
 
 @st.cache_resource

@@ -52,52 +52,53 @@ def get_drive_service():
 
 @st.cache_data
 def download_file_from_drive(file_name, file_type='file'):
-    """Google Drive에서 파일 다운로드"""
+    """Google Drive에서 파일 다운로드 (하위 폴더까지 탐색 지원)"""
     service = get_drive_service()
     if not service:
         return None
-    
-    try:
-        # 파일 검색
-        if file_type == 'file':
-            query = f"name='{file_name}' and '{FOLDER_ID}' in parents"
-        else:  # 폴더 내 파일 검색
-            folder_name, actual_file = file_name.split('/', 1)
-            # 먼저 폴더 ID 찾기
-            folder_query = f"name='{folder_name}' and '{FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder'"
-            folder_results = service.files().list(q=folder_query, fields="files(id)").execute()
-            
-            if not folder_results.get('files'):
-                st.error(f"폴더를 찾을 수 없습니다: {folder_name}")
-                return None
-            
-            folder_id = folder_results['files'][0]['id']
-            query = f"name='{actual_file}' and '{folder_id}' in parents"
-        
-        results = service.files().list(q=query, fields="files(id, name)").execute()
+
+    def find_file_recursively(folder_id, target_name):
+        """하위 폴더까지 재귀적으로 파일 탐색"""
+        # 현재 폴더에서 검색
+        query = f"'{folder_id}' in parents and name='{target_name}'"
+        results = service.files().list(q=query, fields="files(id, name, mimeType)").execute()
         files = results.get('files', [])
-        
-        if not files:
+        if files:
+            return files[0]['id']
+
+        # 하위 폴더 순회
+        subfolders_query = f"'{folder_id}' in parents and mimeType='application/vnd.google-apps.folder'"
+        subfolders = service.files().list(q=subfolders_query, fields="files(id, name)").execute().get('files', [])
+        for subfolder in subfolders:
+            found = find_file_recursively(subfolder['id'], target_name)
+            if found:
+                return found
+        return None
+
+    try:
+        # 파일명에서 실제 이름만 추출
+        target_name = os.path.basename(file_name)
+        file_id = find_file_recursively(FOLDER_ID, target_name)
+        if not file_id:
             st.error(f"파일을 찾을 수 없습니다: {file_name}")
             return None
-        
-        file_id = files[0]['id']
-        
+
         # 파일 다운로드
         request = service.files().get_media(fileId=file_id)
         file_content = io.BytesIO()
         downloader = MediaIoBaseDownload(file_content, request)
-        
+
         done = False
         while not done:
             status, done = downloader.next_chunk()
-        
+
         file_content.seek(0)
         return file_content
-        
+
     except Exception as e:
         st.error(f"파일 다운로드 실패 ({file_name}): {str(e)}")
         return None
+
 
 @st.cache_resource
 def load_models_from_drive():
@@ -141,6 +142,7 @@ def load_models_from_drive():
             file_content = download_file_from_drive(file_path)
             if file_content:
                 try:
+                    file_content.seek(0)
                     models[hospital][model_type] = joblib.load(file_content)
                 except Exception as e:
                     st.error(f"모델 로드 실패 ({file_path}): {str(e)}")
@@ -172,6 +174,7 @@ def load_predictor_modules():
     for file_path in predictor_files:
         file_content = download_file_from_drive(file_path)
         if file_content:
+            file_content.seek(0)
             file_name = os.path.basename(file_path)
             local_path = os.path.join(predictors_dir, file_name)
             with open(local_path, 'wb') as f:

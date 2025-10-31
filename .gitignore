@@ -1,0 +1,5 @@
+# Ignore everything except main.py, requirements.txt, and .gitignore
+*
+!main.py
+!requirements.txt
+!.gitignore

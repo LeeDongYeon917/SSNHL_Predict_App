@@ -1,2 +1,0 @@
-               Accuracy  Precision  Recall  Specificity  F1 Score  AUROC      Model
-best LightGBM     0.742      0.691   0.864        0.622     0.738  0.775  best_lgbm

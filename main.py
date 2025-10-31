@@ -163,6 +163,13 @@ def load_predictor_modules():
     
     # predictors 디렉토리 생성
     temp_dir = tempfile.mkdtemp()
+        # ✅ sys.path에 미리 추가 (중요)
+    if temp_dir not in sys.path:
+        sys.path.insert(0, temp_dir)
+    predictors_dir = os.path.join(temp_dir, 'predictors')
+    if predictors_dir not in sys.path:
+        sys.path.insert(0, predictors_dir)
+
     predictors_dir = os.path.join(temp_dir, 'predictors')
     os.makedirs(predictors_dir, exist_ok=True)
     
@@ -179,17 +186,7 @@ def load_predictor_modules():
             local_path = os.path.join(predictors_dir, file_name)
             with open(local_path, 'wb') as f:
                 f.write(file_content.read())
-    
-    # sys.path에 추가
-    if temp_dir not in sys.path:
-        sys.path.insert(0, temp_dir)
 
-    # predictors 폴더를 직접 추가 (중요)
-    predictors_path = os.path.join(temp_dir, 'predictors')
-    if predictors_path not in sys.path:
-        sys.path.insert(0, predictors_path)
-    
-    return temp_dir
 
 @st.cache_resource
 def load_preprocessing_and_translation():
@@ -198,6 +195,13 @@ def load_preprocessing_and_translation():
     modules = {}
     
     temp_dir = tempfile.mkdtemp()
+        # ✅ sys.path에 미리 추가 (중요)
+    if temp_dir not in sys.path:
+        sys.path.insert(0, temp_dir)
+    predictors_path = os.path.join(temp_dir, 'predictors')
+    if predictors_path not in sys.path:
+        sys.path.insert(0, predictors_path)
+
     
     for file_name in files:
         file_content = download_file_from_drive(file_name)
@@ -205,15 +209,6 @@ def load_preprocessing_and_translation():
             local_path = os.path.join(temp_dir, file_name)
             with open(local_path, 'wb') as f:
                 f.write(file_content.read())
-    
-    # sys.path에 추가
-    if temp_dir not in sys.path:
-        sys.path.insert(0, temp_dir)
-    
-    # predictors 폴더를 직접 추가 (중요)
-    predictors_path = os.path.join(temp_dir, 'predictors')
-    if predictors_path not in sys.path:
-        sys.path.insert(0, predictors_path)
 
     # 모듈 import
     try:

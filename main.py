@@ -370,8 +370,12 @@ pta_frequencies = ["250", "500", "1000", "2000", "3000", "4000", "8000"]
 
 with st.sidebar:
     with st.expander(f"🧍 {texts['기본 정보 입력']}"):
-        id_value = st.number_input("ID", min_value=0, max_value=999999999, step=1)
-        birth_date = st.date_input(texts["생년월일"])
+        id_value = st.text_input(texts["ID"])
+        birth_date = st.date_input(
+            texts["생년월일"],
+            min_value=datetime.date(1900, 1, 1),
+            max_value=datetime.date.today()
+        )
         gender = st.selectbox(texts["성별"], ["Male", "Female"])
         name = st.text_input(texts["이름"])
         hsptcd = st.text_input(texts["병원코드 (HSPTCD)"])

@@ -174,28 +174,29 @@ def load_models_from_drive():
             "scaler": "models/ys_minmax_scaler.joblib"
         },
         "sev": {
-            "lgbm": "models/sv_lightgbm_model.joblib",
-            "xgb": "models/sv_xgboost_model.joblib",
-            "scaler": "models/sv_minmax_scaler.joblib"
+            "lgbm": "models/sev_lightgbm_model.joblib",
+            "xgb": "models/sev_xgboost_model.joblib",
+            "scaler": "models/sev_minmax_scaler.joblib"
         },
         "hallym": {
-            "lgbm": "models/hm_lightgbm_model.joblib",
-            "xgb": "models/hm_xgboost_model.joblib",
-            "scaler": "models/hm_minmax_scaler.joblib"
+            "lgbm": "models/hallym_lightgbm_model.joblib",
+            "xgb": "models/hallym_xgboost_model.joblib",
+            "scaler": "models/hallym_minmax_scaler.joblib"
         },
         "jeju": {
-            "lgbm": "models/jj_lightgbm_model.joblib",
-            "xgb": "models/jj_xgboost_model.joblib",
-            "scaler": "models/jj_minmax_scaler.joblib"
+            "lgbm": "models/jeju_lightgbm_model.joblib",
+            "xgb": "models/jeju_xgboost_model.joblib",
+            "scaler": "models/jeju_minmax_scaler.joblib"
         },
         "hagen": {
-            "lgbm": "models/de_lightgbm_model.joblib",
-            "xgb": "models/de_xgboost_model.joblib",
-            "scaler": "models/de_minmax_scaler.joblib"
-        },
+            "lgbm": "models/hagen_lightgbm_model.joblib",
+            "xgb": "models/hagen_xgboost_model.joblib",
+            "scaler": "models/hagen_minmax_scaler.joblib"
+        }
     }
 
     loaded_models = {}
+
     for hospital, paths in model_files.items():
         loaded_models[hospital] = {}
         for model_type, path in paths.items():

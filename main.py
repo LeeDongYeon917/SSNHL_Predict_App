@@ -1,7 +1,6 @@
 import streamlit as st
 # 🚨 캐시 완전 초기화
 st.cache_resource.clear()
-st.write("✅ Streamlit cache cleared")
 
 # -*- coding: utf-8 -*-
 import pandas as pd
@@ -127,9 +126,6 @@ def load_predictor_modules():
     sys.path.insert(0, parent_dir)
     sys.path.insert(0, predictors_dir)
 
-    st.write("📁 predictors_dir:", predictors_dir)
-    st.write("📦 sys.path 상위 3개:", sys.path[:3])
-    st.write("📄 predictors 안의 파일:", os.listdir(predictors_dir))
     return predictors_dir
 
 # ======================
@@ -207,7 +203,6 @@ def load_models_from_drive():
                     tmp.write(content.read())
                     tmp.close()
                     loaded_models[hospital][model_type] = joblib.load(tmp.name)
-                    st.success(f"✅ {hospital} {model_type} 모델 로드 완료")
                 else:
                     st.warning(f"⚠️ {hospital} {model_type} 모델 없음")
             except Exception as e:
@@ -233,7 +228,6 @@ with st.spinner("Google Drive에서 파일을 로드하는 중..."):
 
     try:
         predictors_all = importlib.import_module("predictors.all")
-        st.success("✅ predictors.all 모듈 로드 완료")
     except ModuleNotFoundError as e:
         st.warning(f"⚠️ Predictor 모듈 로드 실패: {e}")
         predictors_all = None

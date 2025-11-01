@@ -370,7 +370,7 @@ pta_frequencies = ["250", "500", "1000", "2000", "3000", "4000", "8000"]
 
 with st.sidebar:
     with st.expander(f"🧍 {texts['기본 정보 입력']}"):
-        id_value = st.text_input(texts["ID"])
+        id_value = st.text_input("ID")
         birth_date = st.date_input(
             texts["생년월일"],
             min_value=datetime.date(1900, 1, 1),

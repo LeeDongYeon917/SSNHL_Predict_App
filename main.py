@@ -44,51 +44,56 @@ def get_drive_service():
 
 @st.cache_data
 def download_file_from_drive(file_name):
-    """Google Drive에서 파일 다운로드 (하위 폴더까지 탐색 지원)"""
+    """Google Drive에서 지정된 파일을 다운로드 (predictors, models 폴더 포함)"""
     service = get_drive_service()
     if not service:
         return None
 
-    def find_file_recursively(folder_id, target_name):
-        query = f"'{folder_id}' in parents and name='{target_name}' and trashed=false"
+    def find_file_recursive(folder_id, target_name):
+        """폴더 전체를 재귀 탐색 (predictors/, models/ 모두 지원)"""
         try:
+            # 현재 폴더에서 파일 검색
+            query = f"'{folder_id}' in parents and name='{target_name}' and trashed=false"
             results = service.files().list(q=query, fields="files(id, name, mimeType)").execute()
             files = results.get("files", [])
             if files:
                 return files[0]["id"]
-            subfolders = (
-                service.files()
-                .list(q=f"'{folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",
-                      fields="files(id, name)")
-                .execute()
-                .get("files", [])
-            )
+
+            # 하위 폴더 검색
+            subfolders_query = f"'{folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            subfolders = service.files().list(q=subfolders_query, fields="files(id, name)").execute().get("files", [])
+
             for sub in subfolders:
-                found = find_file_recursively(sub["id"], target_name)
+                found = find_file_recursive(sub["id"], target_name)
                 if found:
                     return found
+
             return None
         except Exception as e:
-            st.warning(f"파일 탐색 중 오류 발생: {e}")
+            st.warning(f"폴더 탐색 중 오류 발생 ({target_name}): {e}")
             return None
 
-    file_id = find_file_recursively(FOLDER_ID, file_name)
+    # 🔍 실제 탐색 시작
+    file_id = find_file_recursive(FOLDER_ID, os.path.basename(file_name))
+
     if not file_id:
         st.warning(f"❌ Google Drive에서 {file_name}을(를) 찾을 수 없습니다.")
         return None
 
+    # ✅ 파일 다운로드
     try:
         request = service.files().get_media(fileId=file_id)
-        file_io = io.BytesIO()
-        downloader = MediaIoBaseDownload(file_io, request)
+        file_data = io.BytesIO()
+        downloader = MediaIoBaseDownload(file_data, request)
         done = False
         while not done:
             status, done = downloader.next_chunk()
-        file_io.seek(0)
-        return file_io
+        file_data.seek(0)
+        return file_data
     except Exception as e:
-        st.error(f"파일 다운로드 실패 ({file_name}): {str(e)}")
+        st.error(f"📁 {file_name} 다운로드 실패: {str(e)}")
         return None
+
 
 # ======================
 # 🔹 predictor 모듈 로드

@@ -55,20 +55,17 @@ def get_sheets_client():
 def save_to_sheets(user_data):
     """사용자 입력 데이터를 Google Sheets에 저장"""
     try:
-        st.write("🔍 디버그: save_to_sheets 함수 시작")
         client = get_sheets_client()
         if not client:
-            st.error("❌ Google Sheets 클라이언트 생성 실패")
             return False
         
-        st.write("✅ 클라이언트 생성 성공")
         # 스프레드시트 열기
         sheet = client.open_by_key(SPREADSHEET_ID).sheet1
-        st.write("✅ 스프레드시트 열기 성공")
         
         # 데이터를 리스트로 변환 (헤더 순서와 동일하게)
         row_data = [
             user_data.get('timestamp', ''),
+            user_data.get('language', ''),
             user_data.get('hospital', ''),
             user_data.get('id', ''),
             user_data.get('birth', ''),
@@ -936,6 +933,7 @@ if predict_button:
             # 저장할 데이터 준비
             save_data = {
                 'timestamp': timestamp,
+                'language': lang_choice_label,
                 'hospital': selected_hospital,
                 'id': id_value,
                 'birth': birth_date.strftime("%Y-%m-%d"),

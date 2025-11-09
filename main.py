@@ -16,11 +16,116 @@ from reportlab.lib.utils import ImageReader
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
 # ======================
 # 🔹 Google Drive 설정
 # ======================
 FOLDER_ID = '1rTMoyzj1qxc8ET5648XvF0E-3oN46lel'
+
+# ======================
+# 🔹 Google Sheets 설정
+# ======================
+SPREADSHEET_ID = '17Y24_hFUJSXXTdHVbL6doo6A2pnvmsRDCG98Ihvenlw'
+
+@st.cache_resource
+def get_sheets_client():
+    """Google Sheets 클라이언트 생성"""
+    try:
+        if 'google' in st.secrets:
+            service_account_info = dict(st.secrets['google'])
+        else:
+            st.error("Google Sheets 서비스 계정 정보가 설정되지 않았습니다.")
+            return None
+        
+        scope = [
+            'https://spreadsheets.google.com/feeds',
+            'https://www.googleapis.com/auth/drive'
+        ]
+        credentials = ServiceAccountCredentials.from_json_keyfile_dict(
+            service_account_info, scope
+        )
+        client = gspread.authorize(credentials)
+        return client
+    except Exception as e:
+        st.error(f"Google Sheets 클라이언트 초기화 실패: {str(e)}")
+        return None
+
+def save_to_sheets(user_data):
+    """사용자 입력 데이터를 Google Sheets에 저장"""
+    try:
+        client = get_sheets_client()
+        if not client:
+            return False
+        
+        # 스프레드시트 열기
+        sheet = client.open_by_key(SPREADSHEET_ID).sheet1
+        
+        # 데이터를 리스트로 변환 (헤더 순서와 동일하게)
+        row_data = [
+            user_data.get('timestamp', ''),
+            user_data.get('hospital', ''),
+            user_data.get('sex', ''),
+            user_data.get('age', ''),
+            user_data.get('hsptcd', ''),
+            user_data.get('side', ''),
+            user_data.get('hl_duration', ''),
+            user_data.get('clinic_date', ''),
+            user_data.get('steroid_treatment', ''),
+            user_data.get('it_dexa_treatment', ''),
+            user_data.get('hyperbaric_treatment', ''),
+            user_data.get('wbc', ''),
+            user_data.get('rbc', ''),
+            user_data.get('hb', ''),
+            user_data.get('plt', ''),
+            user_data.get('neutrophil', ''),
+            user_data.get('lymphocyte', ''),
+            user_data.get('ast', ''),
+            user_data.get('alt', ''),
+            user_data.get('bun', ''),
+            user_data.get('cr', ''),
+            user_data.get('glucose', ''),
+            user_data.get('total_protein', ''),
+            user_data.get('na', ''),
+            user_data.get('k', ''),
+            user_data.get('cl', ''),
+            user_data.get('pta_rt_ac_250', ''),
+            user_data.get('pta_lt_ac_250', ''),
+            user_data.get('pta_rt_ac_500', ''),
+            user_data.get('pta_lt_ac_500', ''),
+            user_data.get('pta_rt_ac_1000', ''),
+            user_data.get('pta_lt_ac_1000', ''),
+            user_data.get('pta_rt_ac_2000', ''),
+            user_data.get('pta_lt_ac_2000', ''),
+            user_data.get('pta_rt_ac_3000', ''),
+            user_data.get('pta_lt_ac_3000', ''),
+            user_data.get('pta_rt_ac_4000', ''),
+            user_data.get('pta_lt_ac_4000', ''),
+            user_data.get('pta_rt_ac_8000', ''),
+            user_data.get('pta_lt_ac_8000', ''),
+            user_data.get('dx_com', ''),
+            user_data.get('dx_ssnhl', ''),
+            user_data.get('dx_dizziness', ''),
+            user_data.get('dx_tinnitus', ''),
+            user_data.get('hx_htn', ''),
+            user_data.get('hx_dm', ''),
+            user_data.get('hx_crf', ''),
+            user_data.get('hx_mi', ''),
+            user_data.get('hx_stroke', ''),
+            user_data.get('hx_cancer', ''),
+            user_data.get('hx_others', ''),
+            user_data.get('prediction', ''),
+            user_data.get('probability', '')
+        ]
+        
+        # 시트에 행 추가
+        sheet.append_row(row_data)
+        return True
+        
+    except Exception as e:
+        st.error(f"데이터 저장 실패: {str(e)}")
+        return False
 
 @st.cache_resource
 def get_drive_service():
@@ -815,6 +920,73 @@ if predict_button:
                             f"{texts['정상범위인']} <b>{low}~{high}</b>&nbsp;{texts['보다']} {direction}</p>",
                             unsafe_allow_html=True
                         )
+
+
+            # ✅ Google Sheets에 데이터 저장
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # 저장할 데이터 준비
+            save_data = {
+                'timestamp': timestamp,
+                'hospital': selected_hospital,
+                'sex': gender,
+                'age': '',  # 계산 필요
+                'hsptcd': hsptcd,
+                'side': side,
+                'hl_duration': hl_duration.strip() if hl_duration else '',
+                'clinic_date': str(clinic_date),
+                'steroid_treatment': int(steroid),
+                'it_dexa_treatment': int(it_dexa),
+                'hyperbaric_treatment': int(hbot),
+                'wbc': blood_values.get('WBC', ''),
+                'rbc': blood_values.get('RBC', ''),
+                'hb': blood_values.get('Hb', ''),
+                'plt': blood_values.get('PLT', ''),
+                'neutrophil': blood_values.get('Neutrophil', ''),
+                'lymphocyte': blood_values.get('Lymphocyte', ''),
+                'ast': blood_values.get('AST', ''),
+                'alt': blood_values.get('ALT', ''),
+                'bun': blood_values.get('BUN', ''),
+                'cr': blood_values.get('Cr', ''),
+                'glucose': blood_values.get('Glucose', ''),
+                'total_protein': blood_values.get('Total_Protein', ''),
+                'na': blood_values.get('Na', ''),
+                'k': blood_values.get('K', ''),
+                'cl': blood_values.get('Cl', ''),
+                'pta_rt_ac_250': pta_values.get('PTA_RT_AC_250', ''),
+                'pta_lt_ac_250': pta_values.get('PTA_LT_AC_250', ''),
+                'pta_rt_ac_500': pta_values.get('PTA_RT_AC_500', ''),
+                'pta_lt_ac_500': pta_values.get('PTA_LT_AC_500', ''),
+                'pta_rt_ac_1000': pta_values.get('PTA_RT_AC_1000', ''),
+                'pta_lt_ac_1000': pta_values.get('PTA_LT_AC_1000', ''),
+                'pta_rt_ac_2000': pta_values.get('PTA_RT_AC_2000', ''),
+                'pta_lt_ac_2000': pta_values.get('PTA_LT_AC_2000', ''),
+                'pta_rt_ac_3000': pta_values.get('PTA_RT_AC_3000', ''),
+                'pta_lt_ac_3000': pta_values.get('PTA_LT_AC_3000', ''),
+                'pta_rt_ac_4000': pta_values.get('PTA_RT_AC_4000', ''),
+                'pta_lt_ac_4000': pta_values.get('PTA_LT_AC_4000', ''),
+                'pta_rt_ac_8000': pta_values.get('PTA_RT_AC_8000', ''),
+                'pta_lt_ac_8000': pta_values.get('PTA_LT_AC_8000', ''),
+                'dx_com': diagnosis_values.get('Dx_COM', 0),
+                'dx_ssnhl': diagnosis_values.get('Dx_SSNHL', 0),
+                'dx_dizziness': diagnosis_values.get('Dx_Dizziness', 0),
+                'dx_tinnitus': diagnosis_values.get('Dx_Tinnitus', 0),
+                'hx_htn': history_values.get('Hx_HTN', 0),
+                'hx_dm': history_values.get('Hx_DM', 0),
+                'hx_crf': history_values.get('Hx_CRF', 0),
+                'hx_mi': history_values.get('Hx_MI', 0),
+                'hx_stroke': history_values.get('Hx_stroke', 0),
+                'hx_cancer': history_values.get('Hx_cancer', 0),
+                'hx_others': hx_others_text,
+                'prediction': f"LightGBM: {lgbm_prob[0]*100:.1f}%, XGBoost: {xgb_prob[0]*100:.1f}%",
+                'probability': f"LightGBM: {'회복' if lgbm_prob[0] >= 0.5 else '비회복'}, XGBoost: {'회복' if xgb_prob[0] >= 0.5 else '비회복'}"
+            }
+            
+            # Google Sheets에 저장
+            if save_to_sheets(save_data):
+                st.success("✅ 데이터가 성공적으로 저장되었습니다!")
+            else:
+                st.warning("⚠️ 데이터 저장에 실패했습니다. 예측 결과는 정상적으로 표시됩니다.")
 
             # 결과 정리 텍스트
             summary_lgbm = f"회복 확률 {lgbm_prob_val:.1f}%, 예측정확도 {predictor.lgbm_acc * 100:.1f}%."

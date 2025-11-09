@@ -326,9 +326,18 @@ def load_models_from_drive():
                     # joblib 먼저 시도, 실패하면 pickle 시도
                     try:
                         loaded_models[hospital][model_type] = joblib.load(tmp.name)
-                    except:
-                        with open(tmp.name, 'rb') as f:
-                            loaded_models[hospital][model_type] = pickle.load(f)
+                        st.write(f"✅ {hospital} {model_type}: joblib 로드 성공")
+                    except Exception as e1:
+                        st.write(f"⚠️ {hospital} {model_type}: joblib 실패, pickle 시도 중...")
+                        st.write(f"   joblib 오류: {str(e1)[:100]}")
+                        try:
+                            with open(tmp.name, 'rb') as f:
+                                loaded_models[hospital][model_type] = pickle.load(f)
+                            st.write(f"✅ {hospital} {model_type}: pickle 로드 성공")
+                        except Exception as e2:
+                            st.write(f"❌ {hospital} {model_type}: pickle도 실패")
+                            st.write(f"   pickle 오류: {str(e2)[:100]}")
+                            raise e2
                 else:
                     st.warning(f"⚠️ {hospital} {model_type} 모델 없음")
             except Exception as e:

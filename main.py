@@ -928,7 +928,9 @@ if predict_button:
 
 
             # ✅ Google Sheets에 데이터 저장
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # 한국 시간(KST) 설정 (UTC+9)
+            kst_time = datetime.datetime.now() + datetime.timedelta(hours=9)
+            timestamp = kst_time.strftime("%Y-%m-%d %H:%M:%S")
             
             # 저장할 데이터 준비
             save_data = {

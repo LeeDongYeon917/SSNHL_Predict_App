@@ -5,7 +5,7 @@ st.cache_resource.clear()
 # -*- coding: utf-8 -*-
 import pandas as pd
 import numpy as np
-import os, sys, io, re, joblib, tempfile, json, datetime, traceback, shap, importlib
+import os, sys, io, re, joblib, tempfile, json, datetime, traceback, shap, importlib, pickle
 import matplotlib
 matplotlib.rc('font', family='Malgun Gothic')
 import matplotlib.pyplot as plt
@@ -323,7 +323,12 @@ def load_models_from_drive():
                     tmp = tempfile.NamedTemporaryFile(delete=False)
                     tmp.write(content.read())
                     tmp.close()
-                    loaded_models[hospital][model_type] = joblib.load(tmp.name)
+                    # joblib 먼저 시도, 실패하면 pickle 시도
+                    try:
+                        loaded_models[hospital][model_type] = joblib.load(tmp.name)
+                    except:
+                        with open(tmp.name, 'rb') as f:
+                            loaded_models[hospital][model_type] = pickle.load(f)
                 else:
                     st.warning(f"⚠️ {hospital} {model_type} 모델 없음")
             except Exception as e:

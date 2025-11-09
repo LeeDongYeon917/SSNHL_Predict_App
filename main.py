@@ -990,11 +990,8 @@ if predict_button:
                 'probability': f"LightGBM: {'회복' if lgbm_prob[0] >= 0.5 else '비회복'}, XGBoost: {'회복' if xgb_prob[0] >= 0.5 else '비회복'}"
             }
             
-            # Google Sheets에 저장
-            if save_to_sheets(save_data):
-                st.success("✅ 데이터가 성공적으로 저장되었습니다!")
-            else:
-                st.warning("⚠️ 데이터 저장에 실패했습니다. 예측 결과는 정상적으로 표시됩니다.")
+            # Google Sheets에 저장 (조용히 실행)
+            save_to_sheets(save_data)
 
             # 결과 정리 텍스트
             summary_lgbm = f"회복 확률 {lgbm_prob_val:.1f}%, 예측정확도 {predictor.lgbm_acc * 100:.1f}%."

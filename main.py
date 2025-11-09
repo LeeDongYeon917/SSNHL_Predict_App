@@ -211,7 +211,8 @@ def download_file_from_drive(file_name):
 def load_predictor_modules():
     predictor_files = [
         'predictors/all.py', 'predictors/wonju.py', 'predictors/sev.py',
-        'predictors/hallym.py', 'predictors/jeju.py', 'predictors/hagen.py'
+        'predictors/hallym.py', 'predictors/jeju.py', 
+        'predictors/hagen_180d.py', 'predictors/hagen_60d.py', 'predictors/hagen_30d.py'
     ]
     temp_dir = tempfile.mkdtemp()
     predictors_dir = os.path.join(temp_dir, 'predictors')
@@ -294,10 +295,20 @@ def load_models_from_drive():
             "xgb": "models/jeju_xgboost_model.joblib",
             "scaler": "models/jeju_minmax_scaler.joblib"
         },
-        "hagen": {
-            "lgbm": "models/hagen_lightgbm_model.joblib",
-            "xgb": "models/hagen_xgboost_model.joblib",
-            "scaler": "models/hagen_minmax_scaler.joblib"
+        "hagen_180d": {
+            "lgbm": "models/hagen_180d_lightgbm_model.joblib",
+            "mlp": "models/hagen_180d_mlp_model.joblib",
+            "scaler": "models/hagen_180d_minmax_scaler.joblib"
+        },
+        "hagen_60d": {
+            "lgbm": "models/hagen_60d_lightgbm_model.joblib",
+            "xgb": "models/hagen_60d_xgboost_model.joblib",
+            "scaler": "models/hagen_60d_minmax_scaler.joblib"
+        },
+        "hagen_30d": {
+            "lgbm": "models/hagen_30d_lightgbm_model.joblib",
+            "mlp": "models/hagen_30d_mlp_model.joblib",
+            "scaler": "models/hagen_30d_minmax_scaler.joblib"
         }
     }
 
@@ -455,11 +466,24 @@ hospital_modules = {
     texts["신촌-강남세브란스병원"]: "predictors.sev",
     texts["한림대학교 강남성심병원"]: "predictors.hallym",
     texts["제주대학병원"]: "predictors.jeju",
-    texts["독일하겐병원"]: "predictors.hagen",
+    texts["독일하겐병원"]: "predictors.hagen_180d",  # 기본값
 }
 
 st.sidebar.title(f"📋 {texts['병원 선택']}")
 selected_hospital = st.sidebar.selectbox("", list(hospital_modules.keys()))
+
+# 독일하겐병원 선택 시 기간 선택 추가
+selected_period = None
+if selected_hospital == texts["독일하겐병원"]:
+    period_options = {
+        "180일 기준": "predictors.hagen_180d",
+        "60일 기준": "predictors.hagen_60d",
+        "30일 기준": "predictors.hagen_30d"
+    }
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📅 예측 기간 선택")
+    selected_period = st.sidebar.selectbox("", list(period_options.keys()), key="period_select")
+    hospital_modules[selected_hospital] = period_options[selected_period]
 
 # predictor 모듈 import 및 모델 설정
 try:
@@ -467,9 +491,20 @@ try:
     
     # 해당 병원의 모델 설정
     hospital_key = hospital_modules[selected_hospital].split('.')[-1]
-    if hospital_key in models and 'lgbm' in models[hospital_key] and 'xgb' in models[hospital_key]:
-        predictor.lgbm_model = models[hospital_key]['lgbm']
-        predictor.xgb_model = models[hospital_key]['xgb']
+    if hospital_key in models:
+        # LightGBM 모델 주입 (모든 병원 공통)
+        if 'lgbm' in models[hospital_key]:
+            predictor.lgbm_model = models[hospital_key]['lgbm']
+        
+        # XGBoost 또는 MLP 모델 주입
+        if 'xgb' in models[hospital_key]:
+            predictor.xgb_model = models[hospital_key]['xgb']
+        elif 'mlp' in models[hospital_key]:
+            predictor.mlp_model = models[hospital_key]['mlp']
+        
+        # Scaler 주입
+        if 'scaler' in models[hospital_key]:
+            predictor.scaler = models[hospital_key]['scaler']
 except Exception as e:
     st.error(f"Predictor 로드 실패: {str(e)}")
     st.stop()
@@ -613,8 +648,14 @@ if predict_button:
             # 정확도 값 가져오기 (캐시 처리)
             if not hasattr(predictor, 'lgbm_acc') or predictor.lgbm_acc is None:
                 predictor.lgbm_acc = get_accuracy_from_drive(hospital_key, 'lgbm')
-            if not hasattr(predictor, 'xgb_acc') or predictor.xgb_acc is None:
-                predictor.xgb_acc = get_accuracy_from_drive(hospital_key, 'xgb')
+            
+            # XGBoost 또는 MLP 정확도 로드
+            if hasattr(predictor, 'xgb_model') and predictor.xgb_model is not None:
+                if not hasattr(predictor, 'xgb_acc') or predictor.xgb_acc is None:
+                    predictor.xgb_acc = get_accuracy_from_drive(hospital_key, 'xgb')
+            elif hasattr(predictor, 'mlp_model') and predictor.mlp_model is not None:
+                if not hasattr(predictor, 'mlp_acc') or predictor.mlp_acc is None:
+                    predictor.mlp_acc = get_accuracy_from_drive(hospital_key, 'mlp')
 
             # LightGBM 결과
             result_df_lgbm = pd.DataFrame({
@@ -624,12 +665,23 @@ if predict_button:
                 "예측 정확도": [f"{predictor.lgbm_acc * 100:.1f}%" for _ in lgbm_result]
             })
 
-            # XGBoost 결과
+            # 두 번째 모델 이름 결정 (XGBoost 또는 MLP)
+            if hasattr(predictor, 'xgb_model') and predictor.xgb_model is not None:
+                second_model_name = "XGBoost"
+                second_model_acc = predictor.xgb_acc
+            elif hasattr(predictor, 'mlp_model') and predictor.mlp_model is not None:
+                second_model_name = "MLP"
+                second_model_acc = predictor.mlp_acc
+            else:
+                second_model_name = "XGBoost"
+                second_model_acc = predictor.xgb_acc if hasattr(predictor, 'xgb_acc') else 0.75
+
+            # XGBoost/MLP 결과
             result_df_xgb = pd.DataFrame({
                 "ID": df_ids["ID"].values,
-                "XGBoost 회복 판단": ["회복" if p >= 0.5 else "비회복" for p in xgb_prob],
-                "XGBoost 회복 확률": [f"{(p * 100):.1f}%" for p in xgb_prob],
-                "예측 정확도": [f"{predictor.xgb_acc * 100:.1f}%" for _ in xgb_result]
+                f"{second_model_name} 회복 판단": ["회복" if p >= 0.5 else "비회복" for p in xgb_prob],
+                f"{second_model_name} 회복 확률": [f"{(p * 100):.1f}%" for p in xgb_prob],
+                "예측 정확도": [f"{second_model_acc * 100:.1f}%" for _ in xgb_result]
             })
 
             st.markdown(f"### 📋 {texts['summary_title']}")
@@ -680,12 +732,12 @@ if predict_button:
                     <td>{predictor.lgbm_acc*100:.1f}%</td>
                 </tr>
                 <tr>
-                    <td><b>XGBoost</b></td>
+                    <td><b>{second_model_name}</b></td>
                     <td style="color: {'green' if xgb_prob[0] >= 0.5 else 'red'}; font-weight: bold;">
                         {texts['회복'] if xgb_prob[0] >= 0.5 else texts['비회복']}
                     </td>
                     <td><b>{xgb_prob[0]*100:.1f}%</b></td>
-                    <td>{predictor.xgb_acc*100:.1f}%</td>
+                    <td>{second_model_acc*100:.1f}%</td>
                 </tr>
             </table>
 
@@ -693,8 +745,8 @@ if predict_button:
                 <b>{name}</b>&nbsp;{texts["님의 예측 결과는 다음과 같습니다."]}<br><br>
                 🔵 <b>LightGBM</b> {texts["기준"]} : {texts["회복 확률"]} <b>{lgbm_prob[0]*100:.1f}%</b>, 
                  {texts["예측 정확도"]} <b>{predictor.lgbm_acc*100:.1f}%<br></b>
-                🟢 <b>XGBoost</b> {texts["기준"]} : {texts["회복 확률"]} <b>{xgb_prob[0]*100:.1f}%</b>, 
-                 {texts["예측 정확도"]} <b>{predictor.xgb_acc*100:.1f}%<br></b>
+                🟢 <b>{second_model_name}</b> {texts["기준"]} : {texts["회복 확률"]} <b>{xgb_prob[0]*100:.1f}%</b>, 
+                 {texts["예측 정확도"]} <b>{second_model_acc*100:.1f}%<br></b>
             </div>
             """, unsafe_allow_html=True)
       
@@ -988,8 +1040,8 @@ if predict_button:
                 'hx_stroke': history_values.get('Hx_stroke', 0),
                 'hx_cancer': history_values.get('Hx_cancer', 0),
                 'hx_others': hx_others_text,
-                'prediction': f"LightGBM: {lgbm_prob[0]*100:.1f}%, XGBoost: {xgb_prob[0]*100:.1f}%",
-                'probability': f"LightGBM: {'회복' if lgbm_prob[0] >= 0.5 else '비회복'}, XGBoost: {'회복' if xgb_prob[0] >= 0.5 else '비회복'}"
+                'prediction': f"LightGBM: {lgbm_prob[0]*100:.1f}%, {second_model_name}: {xgb_prob[0]*100:.1f}%",
+                'probability': f"LightGBM: {'회복' if lgbm_prob[0] >= 0.5 else '비회복'}, {second_model_name}: {'회복' if xgb_prob[0] >= 0.5 else '비회복'}"
             }
             
             # Google Sheets에 저장 (조용히 실행)
@@ -997,7 +1049,7 @@ if predict_button:
 
             # 결과 정리 텍스트
             summary_lgbm = f"회복 확률 {lgbm_prob_val:.1f}%, 예측정확도 {predictor.lgbm_acc * 100:.1f}%."
-            summary_xgb = f"회복 확률 {xgb_prob_val:.1f}%, 예측정확도 {predictor.xgb_acc * 100:.1f}%."
+            summary_xgb = f"회복 확률 {xgb_prob_val:.1f}%, 예측정확도 {second_model_acc * 100:.1f}%."
 
             # 📸 결과 요약 이미지 생성
             def create_summary_image(

@@ -55,12 +55,16 @@ def get_sheets_client():
 def save_to_sheets(user_data):
     """사용자 입력 데이터를 Google Sheets에 저장"""
     try:
+        st.write("🔍 디버그: save_to_sheets 함수 시작")
         client = get_sheets_client()
         if not client:
+            st.error("❌ Google Sheets 클라이언트 생성 실패")
             return False
         
+        st.write("✅ 클라이언트 생성 성공")
         # 스프레드시트 열기
         sheet = client.open_by_key(SPREADSHEET_ID).sheet1
+        st.write("✅ 스프레드시트 열기 성공")
         
         # 데이터를 리스트로 변환 (헤더 순서와 동일하게)
         row_data = [
@@ -124,7 +128,9 @@ def save_to_sheets(user_data):
         return True
         
     except Exception as e:
-        st.error(f"데이터 저장 실패: {str(e)}")
+        st.error(f"❌ 데이터 저장 실패: {str(e)}")
+        import traceback
+        st.error(f"상세 에러: {traceback.format_exc()}")
         return False
 
 @st.cache_resource

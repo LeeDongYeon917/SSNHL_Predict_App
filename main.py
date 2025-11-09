@@ -5,7 +5,7 @@ st.cache_resource.clear()
 # -*- coding: utf-8 -*-
 import pandas as pd
 import numpy as np
-import os, sys, io, re, joblib, tempfile, json, datetime, traceback, shap, importlib, pickle
+import os, sys, io, re, joblib, tempfile, json, datetime, traceback, shap, importlib, pickle, cloudpickle
 import matplotlib
 matplotlib.rc('font', family='Malgun Gothic')
 import matplotlib.pyplot as plt
@@ -323,21 +323,26 @@ def load_models_from_drive():
                     tmp = tempfile.NamedTemporaryFile(delete=False)
                     tmp.write(content.read())
                     tmp.close()
-                    # joblib 먼저 시도, 실패하면 pickle 시도
+                    # cloudpickle 먼저 시도, 실패하면 pickle, 마지막으로 joblib
                     try:
-                        loaded_models[hospital][model_type] = joblib.load(tmp.name)
-                        st.write(f"✅ {hospital} {model_type}: joblib 로드 성공")
+                        with open(tmp.name, 'rb') as f:
+                            loaded_models[hospital][model_type] = cloudpickle.load(f)
+                        st.write(f"✅ {hospital} {model_type}: cloudpickle 로드 성공")
                     except Exception as e1:
-                        st.write(f"⚠️ {hospital} {model_type}: joblib 실패, pickle 시도 중...")
-                        st.write(f"   joblib 오류: {str(e1)[:100]}")
                         try:
                             with open(tmp.name, 'rb') as f:
                                 loaded_models[hospital][model_type] = pickle.load(f)
                             st.write(f"✅ {hospital} {model_type}: pickle 로드 성공")
                         except Exception as e2:
-                            st.write(f"❌ {hospital} {model_type}: pickle도 실패")
-                            st.write(f"   pickle 오류: {str(e2)[:100]}")
-                            raise e2
+                            try:
+                                loaded_models[hospital][model_type] = joblib.load(tmp.name)
+                                st.write(f"✅ {hospital} {model_type}: joblib 로드 성공")
+                            except Exception as e3:
+                                st.write(f"❌ {hospital} {model_type}: 모든 로드 방식 실패")
+                                st.write(f"   cloudpickle 오류: {str(e1)[:100]}")
+                                st.write(f"   pickle 오류: {str(e2)[:100]}")
+                                st.write(f"   joblib 오류: {str(e3)[:100]}")
+                                raise e3
                 else:
                     st.warning(f"⚠️ {hospital} {model_type} 모델 없음")
             except Exception as e:

@@ -71,6 +71,7 @@ def save_to_sheets(user_data):
             user_data.get('timestamp', ''),
             user_data.get('hospital', ''),
             user_data.get('sex', ''),
+            user_data.get('name', ''),  # 이름 추가
             user_data.get('age', ''),
             user_data.get('hsptcd', ''),
             user_data.get('side', ''),
@@ -936,6 +937,7 @@ if predict_button:
                 'timestamp': timestamp,
                 'hospital': selected_hospital,
                 'sex': gender,
+                'name': name,  # 이름 추가
                 'age': '',  # 계산 필요
                 'hsptcd': hsptcd,
                 'side': side,

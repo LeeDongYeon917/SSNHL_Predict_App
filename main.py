@@ -779,8 +779,10 @@ if predict_button:
             </div>
             """, unsafe_allow_html=True)
       
-            # 🔴 SHAP explainer 및 계산
-            # LightGBM - TreeExplainer
+            # 🔴 SHAP explainer 및 계산 (모델 존재 여부 확인)
+            import numpy as np
+
+            # LightGBM
             if hasattr(predictor, 'lgbm_model') and predictor.lgbm_model is not None:
                 explainer_lgbm = shap.TreeExplainer(predictor.lgbm_model)
                 shap_values_lgbm_raw = explainer_lgbm.shap_values(df_lgbm)
@@ -788,30 +790,23 @@ if predict_button:
             else:
                 shap_values_lgbm = None
 
-            # XGBoost - TreeExplainer
+            # XGBoost 또는 MLP
             if hasattr(predictor, 'xgb_model') and predictor.xgb_model is not None:
+                # XGBoost - TreeExplainer
                 explainer_xgb = shap.TreeExplainer(predictor.xgb_model)
                 shap_values_xgb_raw = explainer_xgb.shap_values(df_xgb)
                 shap_values_xgb = shap_values_xgb_raw[1] if isinstance(shap_values_xgb_raw, list) else shap_values_xgb_raw
                 second_model_name = "XGBoost"
                 
-            # MLP - Permutation Importance 사용 (SHAP 대신)
             elif hasattr(predictor, 'mlp_model') and predictor.mlp_model is not None:
-                from sklearn.inspection import permutation_importance
+                # MLP - 첫 번째 레이어 가중치 기반 변수 중요도
+                first_layer_weights = predictor.mlp_model.coefs_[0]  # (n_features, n_hidden)
+                feature_importance = np.abs(first_layer_weights).mean(axis=1)
                 
-                # Permutation Importance 계산
-                perm_importance = permutation_importance(
-                    predictor.mlp_model, 
-                    df_xgb, 
-                    predictor.mlp_acc * len(df_xgb),  # y_true 대신 예측값 사용
-                    n_repeats=10,
-                    random_state=42
-                )
-                
-                # SHAP 형식으로 변환 (시각화 호환)
-                shap_values_xgb = np.tile(perm_importance.importances_mean, (len(df_xgb), 1))
+                # SHAP 형식으로 변환
+                shap_values_xgb = np.tile(feature_importance, (len(df_xgb), 1))
                 second_model_name = "MLP"
-                st.info("MLP는 Permutation Importance를 사용합니다.")
+                
             else:
                 shap_values_xgb = None
                 second_model_name = None

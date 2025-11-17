@@ -790,19 +790,40 @@ if predict_button:
 
             # XGBoost 또는 MLP
             if hasattr(predictor, 'xgb_model') and predictor.xgb_model is not None:
+                # XGBoost - TreeExplainer 사용
                 explainer_xgb = shap.TreeExplainer(predictor.xgb_model)
                 shap_values_xgb_raw = explainer_xgb.shap_values(df_xgb)
                 shap_values_xgb = shap_values_xgb_raw[1] if isinstance(shap_values_xgb_raw, list) else shap_values_xgb_raw
                 second_model_name = "XGBoost"
+                
             elif hasattr(predictor, 'mlp_model') and predictor.mlp_model is not None:
-                # MLP는 KernelExplainer 사용 (전체 데이터)
-                background = shap.sample(df_xgb, min(100, len(df_xgb)))
-                explainer_xgb = shap.KernelExplainer(
-                    lambda x: predictor.mlp_model.predict_proba(x)[:, 1],
-                    background
-                )
-                shap_values_xgb = explainer_xgb.shap_values(df_xgb)  # 전체 데이터 사용
-                second_model_name = "MLP"
+                # MLP - Explainer 사용 (predict_proba 기반)
+                try:
+                    # 방법 1: shap.Explainer (권장)
+                    explainer_xgb = shap.Explainer(
+                        predictor.mlp_model.predict_proba, 
+                        df_xgb
+                    )
+                    shap_values_obj = explainer_xgb(df_xgb)
+                    # positive class (index 1) 선택
+                    if len(shap_values_obj.shape) == 3:
+                        shap_values_xgb = shap_values_obj.values[:, :, 1]
+                    else:
+                        shap_values_xgb = shap_values_obj.values
+                    second_model_name = "MLP"
+                    
+                except Exception as e:
+                    st.warning(f"MLP SHAP 계산 중 오류 발생: {str(e)}. 대체 방법 사용 중...")
+                    
+                    # 방법 2: Permutation-based explainer (더 느리지만 정확)
+                    explainer_xgb = shap.Explainer(
+                        lambda x: predictor.mlp_model.predict_proba(x)[:, 1],
+                        df_xgb,
+                        algorithm='permutation'
+                    )
+                    shap_values_obj = explainer_xgb(df_xgb, max_evals=2*df_xgb.shape[1]+1)
+                    shap_values_xgb = shap_values_obj.values
+                    second_model_name = "MLP"
             else:
                 shap_values_xgb = None
                 second_model_name = None

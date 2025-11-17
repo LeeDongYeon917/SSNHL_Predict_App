@@ -324,25 +324,35 @@ def load_models_from_drive():
                     tmp.write(content.read())
                     tmp.close()
                     # cloudpickle 먼저 시도, 실패하면 pickle, 마지막으로 joblib
-                    try:
-                        with open(tmp.name, 'rb') as f:
-                            loaded_models[hospital][model_type] = cloudpickle.load(f)
-                        st.write(f"✅ {hospital} {model_type}: cloudpickle 로드 성공")
-                    except Exception as e1:
+                    
+                    # scaler는 무조건 joblib로 로드
+                    if 'scaler' in model_type:
+                        try:
+                            loaded_models[hospital][model_type] = joblib.load(tmp.name)
+                            st.write(f"✅ {hospital} {model_type}: joblib 로드 성공")
+                        except Exception as e:
+                            st.write(f"❌ {hospital} {model_type}: joblib 실패: {e}")
+                    else:
+                        # 모델은 기존 방식대로
                         try:
                             with open(tmp.name, 'rb') as f:
-                                loaded_models[hospital][model_type] = pickle.load(f)
-                            st.write(f"✅ {hospital} {model_type}: pickle 로드 성공")
-                        except Exception as e2:
+                                loaded_models[hospital][model_type] = cloudpickle.load(f)
+                            st.write(f"✅ {hospital} {model_type}: cloudpickle 로드 성공")
+                        except Exception as e1:
                             try:
-                                loaded_models[hospital][model_type] = joblib.load(tmp.name)
-                                st.write(f"✅ {hospital} {model_type}: joblib 로드 성공")
-                            except Exception as e3:
-                                st.write(f"❌ {hospital} {model_type}: 모든 로드 방식 실패")
-                                st.write(f"   cloudpickle 오류: {str(e1)[:100]}")
-                                st.write(f"   pickle 오류: {str(e2)[:100]}")
-                                st.write(f"   joblib 오류: {str(e3)[:100]}")
-                                raise e3
+                                with open(tmp.name, 'rb') as f:
+                                    loaded_models[hospital][model_type] = pickle.load(f)
+                                st.write(f"✅ {hospital} {model_type}: pickle 로드 성공")
+                            except Exception as e2:
+                                try:
+                                    loaded_models[hospital][model_type] = joblib.load(tmp.name)
+                                    st.write(f"✅ {hospital} {model_type}: joblib 로드 성공")
+                                except Exception as e3:
+                                    st.write(f"❌ {hospital} {model_type}: 모든 로드 방식 실패")
+                                    st.write(f"   cloudpickle 오류: {str(e1)[:100]}")
+                                    st.write(f"   pickle 오류: {str(e2)[:100]}")
+                                    st.write(f"   joblib 오류: {str(e3)[:100]}")
+                                    raise e3
                 else:
                     st.warning(f"⚠️ {hospital} {model_type} 모델 없음")
             except Exception as e:

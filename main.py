@@ -728,10 +728,29 @@ if predict_button:
             })
 
             st.markdown(f"### 📋 {texts['summary_title']}")
-        
+    
+
             # LightGBM 회복 확률 (첫 번째 샘플 기준)
             lgbm_prob_val = lgbm_prob[0] * 100
             xgb_prob_val = xgb_prob[0] * 100
+
+                        # main.py의 예측 후 (760번 줄 근처에 추가)
+            st.write("### 🔍 디버깅 정보")
+            st.write(f"lgbm_prob: {lgbm_prob}")
+            st.write(f"mlp_prob: {mlp_prob}")
+            st.write(f"mlp_pred: {mlp_pred}")
+            st.write(f"mlp_model type: {type(mlp_model)}")
+
+            # MLP 모델 정보
+            if hasattr(mlp_model, 'n_features_in_'):
+                st.write(f"MLP n_features: {mlp_model.n_features_in_}")
+            if hasattr(mlp_model, 'classes_'):
+                st.write(f"MLP classes: {mlp_model.classes_}")
+
+            # 입력 데이터 확인
+            st.write(f"df_mlp shape: {df_mlp.shape}")
+            st.write(f"df_mlp columns: {list(df_mlp.columns)}")
+            st.write(f"df_mlp values (first row): {df_mlp.iloc[0].values[:10]}")
 
             # 통합 예측 요약 테이블 (표 스타일로)
             

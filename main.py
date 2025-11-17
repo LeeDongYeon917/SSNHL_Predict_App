@@ -759,23 +759,27 @@ if predict_button:
             lgbm_prob_val = lgbm_prob[0] * 100
             xgb_prob_val = xgb_prob[0] * 100
 
-                        # main.py의 예측 후 (760번 줄 근처에 추가)
+            # main.py의 예측 후 (760번 줄 근처에 추가)
             st.write("### 🔍 디버깅 정보")
             st.write(f"lgbm_prob: {lgbm_prob}")
-            st.write(f"mlp_prob: {mlp_prob}")
-            st.write(f"mlp_pred: {mlp_pred}")
-            st.write(f"mlp_model type: {type(mlp_model)}")
+            st.write(f"xgb_prob (MLP or XGBoost): {xgb_prob}")
+            st.write(f"lgbm_result: {lgbm_result}")
+            st.write(f"xgb_result: {xgb_result}")
 
-            # MLP 모델 정보
-            if hasattr(mlp_model, 'n_features_in_'):
-                st.write(f"MLP n_features: {mlp_model.n_features_in_}")
-            if hasattr(mlp_model, 'classes_'):
-                st.write(f"MLP classes: {mlp_model.classes_}")
+            # 모델 타입 확인
+            if xgb_model is not None:
+                st.write(f"second_model type: {type(xgb_model)}")
+                
+                # MLP 모델 정보
+                if hasattr(xgb_model, 'n_features_in_'):
+                    st.write(f"Model n_features: {xgb_model.n_features_in_}")
+                if hasattr(xgb_model, 'classes_'):
+                    st.write(f"Model classes: {xgb_model.classes_}")
 
             # 입력 데이터 확인
-            st.write(f"df_mlp shape: {df_mlp.shape}")
-            st.write(f"df_mlp columns: {list(df_mlp.columns)}")
-            st.write(f"df_mlp values (first row): {df_mlp.iloc[0].values[:10]}")
+            st.write(f"df_xgb shape: {df_xgb.shape}")
+            st.write(f"df_xgb columns: {list(df_xgb.columns)[:10]}...")  # 처음 10개만
+            st.write(f"df_xgb values (first row, first 10): {df_xgb.iloc[0].values[:10]}")
 
             # 통합 예측 요약 테이블 (표 스타일로)
             

@@ -837,14 +837,14 @@ if predict_button:
                     else:
                         st.info("LightGBM SHAP 분석을 사용할 수 없습니다.")
 
-with col2:
-    if shap_values_xgb is not None:
-        model_name = "XGBoost" if hasattr(predictor, 'xgb_model') and predictor.xgb_model is not None else "MLP"
-        st.subheader(f"🔹 {model_name} {texts['변수 중요도']}")
-        fig_xgb = plt.figure()
-        # MLP인 경우 df_xgb 대신 샘플링된 데이터 사용
-        display_data = df_xgb if model_name == "XGBoost" else df_xgb[:len(shap_values_xgb)]
-        shap.summary_plot(shap_values_xgb, display_data, plot_type="bar", show=False)
+            with col2:
+                if shap_values_xgb is not None:
+                    model_name = "XGBoost" if hasattr(predictor, 'xgb_model') and predictor.xgb_model is not None else "MLP"
+                    st.subheader(f"🔹 {model_name} {texts['변수 중요도']}")
+                    fig_xgb = plt.figure()
+                    # MLP인 경우 df_xgb 대신 샘플링된 데이터 사용
+                    display_data = df_xgb if model_name == "XGBoost" else df_xgb[:len(shap_values_xgb)]
+                    shap.summary_plot(shap_values_xgb, display_data, plot_type="bar", show=False)
 
             normal_ranges = {
                 "WBC": (4.0, 10.0), "RBC": (3.8, 5.2), "Hb": (12.0, 16.0), "PLT": (165, 360),

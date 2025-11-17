@@ -650,7 +650,21 @@ if predict_button:
             "Hx_others": hx_others
         }])
 
-        lgbm_result, lgbm_prob, xgb_result, xgb_prob, df_lgbm, df_xgb, df_ids, lgbm_model, xgb_model, lgbm_acc, xgb_acc = predictor.predict_outcome(df_input)
+        # Hagen180d의 경우
+        if selected_hospital == "Hagen (180일)":
+            lgbm_result, lgbm_prob, mlp_result, mlp_prob, df_lgbm, df_mlp, df_ids, lgbm_model, mlp_model, lgbm_acc, mlp_acc = \
+                predictor.predict_outcome(df_input)
+            
+            # 하위 호환을 위해 변수명 통일
+            xgb_result = mlp_result
+            xgb_prob = mlp_prob
+            df_xgb = df_mlp
+            xgb_model = mlp_model
+            
+        else:
+            # 다른 병원 (XGBoost 사용)
+            lgbm_result, lgbm_prob, xgb_result, xgb_prob, df_lgbm, df_xgb, df_ids, lgbm_model, xgb_model, lgbm_scaler = \
+                predictor.predict(df_input)
 
         if all(v is not None for v in [lgbm_result, lgbm_prob, xgb_result, xgb_prob]):            
 

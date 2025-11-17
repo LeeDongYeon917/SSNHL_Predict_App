@@ -779,8 +779,8 @@ if predict_button:
             </div>
             """, unsafe_allow_html=True)
       
-            # 🔴 SHAP explainer 및 계산 (모델 존재 여부 확인)
-            # LightGBM
+            # 🔴 SHAP explainer 및 계산
+            # LightGBM - TreeExplainer
             if hasattr(predictor, 'lgbm_model') and predictor.lgbm_model is not None:
                 explainer_lgbm = shap.TreeExplainer(predictor.lgbm_model)
                 shap_values_lgbm_raw = explainer_lgbm.shap_values(df_lgbm)
@@ -788,42 +788,30 @@ if predict_button:
             else:
                 shap_values_lgbm = None
 
-            # XGBoost 또는 MLP
+            # XGBoost - TreeExplainer
             if hasattr(predictor, 'xgb_model') and predictor.xgb_model is not None:
-                # XGBoost - TreeExplainer 사용
                 explainer_xgb = shap.TreeExplainer(predictor.xgb_model)
                 shap_values_xgb_raw = explainer_xgb.shap_values(df_xgb)
                 shap_values_xgb = shap_values_xgb_raw[1] if isinstance(shap_values_xgb_raw, list) else shap_values_xgb_raw
                 second_model_name = "XGBoost"
                 
+            # MLP - Permutation Importance 사용 (SHAP 대신)
             elif hasattr(predictor, 'mlp_model') and predictor.mlp_model is not None:
-                # MLP - Explainer 사용 (predict_proba 기반)
-                try:
-                    # 방법 1: shap.Explainer (권장)
-                    explainer_xgb = shap.Explainer(
-                        predictor.mlp_model.predict_proba, 
-                        df_xgb
-                    )
-                    shap_values_obj = explainer_xgb(df_xgb)
-                    # positive class (index 1) 선택
-                    if len(shap_values_obj.shape) == 3:
-                        shap_values_xgb = shap_values_obj.values[:, :, 1]
-                    else:
-                        shap_values_xgb = shap_values_obj.values
-                    second_model_name = "MLP"
-                    
-                except Exception as e:
-                    st.warning(f"MLP SHAP 계산 중 오류 발생: {str(e)}. 대체 방법 사용 중...")
-                    
-                    # 방법 2: Permutation-based explainer (더 느리지만 정확)
-                    explainer_xgb = shap.Explainer(
-                        lambda x: predictor.mlp_model.predict_proba(x)[:, 1],
-                        df_xgb,
-                        algorithm='permutation'
-                    )
-                    shap_values_obj = explainer_xgb(df_xgb, max_evals=2*df_xgb.shape[1]+1)
-                    shap_values_xgb = shap_values_obj.values
-                    second_model_name = "MLP"
+                from sklearn.inspection import permutation_importance
+                
+                # Permutation Importance 계산
+                perm_importance = permutation_importance(
+                    predictor.mlp_model, 
+                    df_xgb, 
+                    predictor.mlp_acc * len(df_xgb),  # y_true 대신 예측값 사용
+                    n_repeats=10,
+                    random_state=42
+                )
+                
+                # SHAP 형식으로 변환 (시각화 호환)
+                shap_values_xgb = np.tile(perm_importance.importances_mean, (len(df_xgb), 1))
+                second_model_name = "MLP"
+                st.info("MLP는 Permutation Importance를 사용합니다.")
             else:
                 shap_values_xgb = None
                 second_model_name = None

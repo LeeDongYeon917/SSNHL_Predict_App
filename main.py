@@ -662,11 +662,36 @@ if predict_button:
             xgb_model = mlp_model
             
         else:
-            # 다른 병원 (XGBoost 사용)
-            lgbm_result, lgbm_prob, xgb_result, xgb_prob, df_lgbm, df_xgb, df_ids, lgbm_model, xgb_model, lgbm_scaler = \
-                predictor.predict(df_input)
+            # 다른 병원들 - predict_outcome 또는 predict 메서드 사용
+            if hasattr(predictor, 'predict_outcome'):
+                result = predictor.predict_outcome(df_input)
+            elif hasattr(predictor, 'predict'):
+                result = predictor.predict(df_input)
+            else:
+                st.error("예측 메서드를 찾을 수 없습니다.")
+                st.stop()
+            
+            # 결과 검증
+            if result[0] is None:
+                st.error("예측 실패")
+                st.stop()
+            
+            # 결과 언패킹 (길이에 따라 다름)
+            if len(result) == 11:
+                # Hagen 30d/60d도 MLP를 사용하는 경우
+                lgbm_result, lgbm_prob, mlp_result, mlp_prob, df_lgbm, df_mlp, df_ids, lgbm_model, mlp_model, lgbm_acc, mlp_acc = result
+                xgb_result = mlp_result
+                xgb_prob = mlp_prob
+                df_xgb = df_mlp
+                xgb_model = mlp_model
+            elif len(result) == 10:
+                # XGBoost를 사용하는 병원
+                lgbm_result, lgbm_prob, xgb_result, xgb_prob, df_lgbm, df_xgb, df_ids, lgbm_model, xgb_model, lgbm_scaler = result
+            else:
+                st.error(f"예상치 못한 반환값 개수: {len(result)}")
+                st.stop()
 
-        if all(v is not None for v in [lgbm_result, lgbm_prob, xgb_result, xgb_prob]):            
+        if all(v is not None for v in [lgbm_result, lgbm_prob, xgb_result, xgb_prob]):      
 
             # 정확도 가져오기 - Google Drive에서 txt 파일 로드
             def get_accuracy_from_drive(hospital_key, model_type):

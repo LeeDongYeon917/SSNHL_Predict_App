@@ -650,48 +650,9 @@ if predict_button:
             "Hx_others": hx_others
         }])
 
-        # Hagen180d의 경우
-        if selected_hospital == "Hagen (180일)":
-            lgbm_result, lgbm_prob, mlp_result, mlp_prob, df_lgbm, df_mlp, df_ids, lgbm_model, mlp_model, lgbm_acc, mlp_acc = \
-                predictor.predict_outcome(df_input)
-            
-            # 하위 호환을 위해 변수명 통일
-            xgb_result = mlp_result
-            xgb_prob = mlp_prob
-            df_xgb = df_mlp
-            xgb_model = mlp_model
-            
-        else:
-            # 다른 병원들 - predict_outcome 또는 predict 메서드 사용
-            if hasattr(predictor, 'predict_outcome'):
-                result = predictor.predict_outcome(df_input)
-            elif hasattr(predictor, 'predict'):
-                result = predictor.predict(df_input)
-            else:
-                st.error("예측 메서드를 찾을 수 없습니다.")
-                st.stop()
-            
-            # 결과 검증
-            if result[0] is None:
-                st.error("예측 실패")
-                st.stop()
-            
-            # 결과 언패킹 (길이에 따라 다름)
-            if len(result) == 11:
-                # Hagen 30d/60d도 MLP를 사용하는 경우
-                lgbm_result, lgbm_prob, mlp_result, mlp_prob, df_lgbm, df_mlp, df_ids, lgbm_model, mlp_model, lgbm_acc, mlp_acc = result
-                xgb_result = mlp_result
-                xgb_prob = mlp_prob
-                df_xgb = df_mlp
-                xgb_model = mlp_model
-            elif len(result) == 10:
-                # XGBoost를 사용하는 병원
-                lgbm_result, lgbm_prob, xgb_result, xgb_prob, df_lgbm, df_xgb, df_ids, lgbm_model, xgb_model, lgbm_scaler = result
-            else:
-                st.error(f"예상치 못한 반환값 개수: {len(result)}")
-                st.stop()
+        lgbm_result, lgbm_prob, xgb_result, xgb_prob, df_lgbm, df_xgb, df_ids, lgbm_model, xgb_model, lgbm_acc, xgb_acc = predictor.predict_outcome(df_input)
 
-        if all(v is not None for v in [lgbm_result, lgbm_prob, xgb_result, xgb_prob]):      
+        if all(v is not None for v in [lgbm_result, lgbm_prob, xgb_result, xgb_prob]):            
 
             # 정확도 가져오기 - Google Drive에서 txt 파일 로드
             def get_accuracy_from_drive(hospital_key, model_type):
@@ -753,33 +714,10 @@ if predict_button:
             })
 
             st.markdown(f"### 📋 {texts['summary_title']}")
-    
-
+        
             # LightGBM 회복 확률 (첫 번째 샘플 기준)
             lgbm_prob_val = lgbm_prob[0] * 100
             xgb_prob_val = xgb_prob[0] * 100
-
-            # main.py의 예측 후 (760번 줄 근처에 추가)
-            st.write("### 🔍 디버깅 정보")
-            st.write(f"lgbm_prob: {lgbm_prob}")
-            st.write(f"xgb_prob (MLP or XGBoost): {xgb_prob}")
-            st.write(f"lgbm_result: {lgbm_result}")
-            st.write(f"xgb_result: {xgb_result}")
-
-            # 모델 타입 확인
-            if xgb_model is not None:
-                st.write(f"second_model type: {type(xgb_model)}")
-                
-                # MLP 모델 정보
-                if hasattr(xgb_model, 'n_features_in_'):
-                    st.write(f"Model n_features: {xgb_model.n_features_in_}")
-                if hasattr(xgb_model, 'classes_'):
-                    st.write(f"Model classes: {xgb_model.classes_}")
-
-            # 입력 데이터 확인
-            st.write(f"df_xgb shape: {df_xgb.shape}")
-            st.write(f"df_xgb columns: {list(df_xgb.columns)[:10]}...")  # 처음 10개만
-            st.write(f"df_xgb values (first row, first 10): {df_xgb.iloc[0].values[:10]}")
 
             # 통합 예측 요약 테이블 (표 스타일로)
             
@@ -841,37 +779,16 @@ if predict_button:
             </div>
             """, unsafe_allow_html=True)
       
-            # 🔴 SHAP explainer 및 계산 (모델 존재 여부 확인)
-            import numpy as np
+            # 🎯 SHAP explainer 및 계산
+            explainer_lgbm = shap.TreeExplainer(predictor.lgbm_model)
+            shap_values_lgbm_raw = explainer_lgbm.shap_values(df_lgbm)  # 원본 저장
 
-            # LightGBM
-            if hasattr(predictor, 'lgbm_model') and predictor.lgbm_model is not None:
-                explainer_lgbm = shap.TreeExplainer(predictor.lgbm_model)
-                shap_values_lgbm_raw = explainer_lgbm.shap_values(df_lgbm)
-                shap_values_lgbm = shap_values_lgbm_raw[1] if isinstance(shap_values_lgbm_raw, list) else shap_values_lgbm_raw
-            else:
-                shap_values_lgbm = None
+            explainer_xgb = shap.TreeExplainer(predictor.xgb_model)
+            shap_values_xgb_raw = explainer_xgb.shap_values(df_xgb)
 
-            # XGBoost 또는 MLP
-            if hasattr(predictor, 'xgb_model') and predictor.xgb_model is not None:
-                # XGBoost - TreeExplainer
-                explainer_xgb = shap.TreeExplainer(predictor.xgb_model)
-                shap_values_xgb_raw = explainer_xgb.shap_values(df_xgb)
-                shap_values_xgb = shap_values_xgb_raw[1] if isinstance(shap_values_xgb_raw, list) else shap_values_xgb_raw
-                second_model_name = "XGBoost"
-                
-            elif hasattr(predictor, 'mlp_model') and predictor.mlp_model is not None:
-                # MLP - 첫 번째 레이어 가중치 기반 변수 중요도
-                first_layer_weights = predictor.mlp_model.coefs_[0]  # (n_features, n_hidden)
-                feature_importance = np.abs(first_layer_weights).mean(axis=1)
-                
-                # SHAP 형식으로 변환
-                shap_values_xgb = np.tile(feature_importance, (len(df_xgb), 1))
-                second_model_name = "MLP"
-                
-            else:
-                shap_values_xgb = None
-                second_model_name = None
+            # ⚠️ multiclass 대응 (보통 binary이면 list로 반환됨)
+            shap_values_lgbm = shap_values_lgbm_raw[1] if isinstance(shap_values_lgbm_raw, list) else shap_values_lgbm_raw
+            shap_values_xgb = shap_values_xgb_raw[1] if isinstance(shap_values_xgb_raw, list) else shap_values_xgb_raw
             
             target_features = [
                 "WBC", "RBC", "Hb", "PLT", "Neutrophil", "Lymphocyte",
@@ -893,20 +810,18 @@ if predict_button:
             with st.expander(f"📊 {texts['전체 변수 중요도 보기']}"):
                 col1, col2 = st.columns(2)
                 with col1:
-                    if shap_values_lgbm is not None:
-                        fig_lgbm = plt.figure()
-                        st.subheader(f"🔹 LightGBM {texts['변수 중요도']}")
-                        shap.summary_plot(shap_values_lgbm, df_lgbm, plot_type="bar", show=False)
-                        plt.gcf().subplots_adjust(top=0.88)
-                        st.pyplot(plt.gcf())
+                    fig_lgbm = plt.figure()
+                    st.subheader(f"🔍 LightGBM {texts['변수 중요도']}")
+                    shap.summary_plot(shap_values_lgbm, df_lgbm, plot_type='bar', show=False)
+                    plt.gcf().subplots_adjust(top=0.88)
+                    st.pyplot(plt.gcf())
 
                 with col2:
-                    if shap_values_xgb is not None and second_model_name is not None:
-                        st.subheader(f"🔹 {second_model_name} {texts['변수 중요도']}")
-                        fig_xgb = plt.figure()
-                        shap.summary_plot(shap_values_xgb, df_xgb, plot_type="bar", show=False)
-                        plt.gcf().subplots_adjust(top=0.88)
-                        st.pyplot(plt.gcf())
+                    st.subheader(f"🔍 XGBoost {texts['변수 중요도']}")
+                    fig_xgb = plt.figure()
+                    shap.summary_plot(shap_values_xgb, df_xgb, plot_type="bar", show=False)
+                    plt.gcf().subplots_adjust(top=0.88)
+                    st.pyplot(plt.gcf())
 
             normal_ranges = {
                 "WBC": (4.0, 10.0), "RBC": (3.8, 5.2), "Hb": (12.0, 16.0), "PLT": (165, 360),
@@ -985,27 +900,25 @@ if predict_button:
             with st.expander(f"🛠️ {texts['조정가능한 변수 중요도 보기']}"):
                 col3, col4 = st.columns(2)
                 with col3:
-                    if shap_values_lgbm is not None:
-                        st.subheader(f"🔧 LightGBM {texts['조정가능 변수']}")
-                        plt.clf()
-                        shap.summary_plot(
-                            shap_values_lgbm[:, feature_indices_lgbm],
-                            df_lgbm[filtered_features_lgbm],
-                            plot_type="bar", show=False
-                        )
-                        plt.gcf().subplots_adjust(top=0.90)
-                        st.pyplot(plt.gcf())
+                    st.subheader(f"🧪 LightGBM {texts['조정가능 변수']}")
+                    plt.clf()
+                    shap.summary_plot(
+                        shap_values_lgbm[:, feature_indices_lgbm],
+                        df_lgbm[filtered_features_lgbm],
+                        plot_type="bar", show=False
+                    )
+                    plt.gcf().subplots_adjust(top=0.90)
+                    st.pyplot(plt.gcf())
 
                 with col4:
-                    if shap_values_xgb is not None and second_model_name is not None:
-                        st.subheader(f"🔧 {second_model_name} {texts['조정가능 변수']}")
-                        shap.summary_plot(
-                            shap_values_xgb[:, feature_indices_xgb],
-                            df_xgb[filtered_features_xgb],
-                            plot_type="bar", show=False
-                        )
-                        plt.gcf().subplots_adjust(top=0.90)
-                        st.pyplot(plt.gcf())
+                    st.subheader(f"🧪 XGBoost {texts['조정가능 변수']}")
+                    shap.summary_plot(
+                        shap_values_xgb[:, feature_indices_xgb],
+                        df_xgb[filtered_features_xgb],
+                        plot_type="bar", show=False
+                    )
+                    plt.gcf().subplots_adjust(top=0.90)
+                    st.pyplot(plt.gcf())
 
             # 변수별 x축 범위 설정 (없으면 기본값 사용)
             custom_xlims = {
@@ -1039,12 +952,11 @@ if predict_button:
 
                 with col_lgbm:
                     st.markdown(
-                        f"### 🔵 LightGBM {texts['기준']}&nbsp;&nbsp;&nbsp; "
-                        f"<span style='font-size:12px;'><span style='color:red;'>●</span> {texts['환자수치']}</span>, "
-                        f"<span style='font-size:12px; background-color:#a4d4a4; padding:1px 5px; border-radius:3px;'> "
-                        f"{texts['정상범위']}</span>",
-                        unsafe_allow_html=True
-                    )
+                            f"### 🔵 LightGBM {texts['기준']}&nbsp;&nbsp;&nbsp; "
+                            f"<span style='font-size:12px;'><span style='color:red;'>●</span> {texts['환자수치']}</span>, "
+                            f"<span style='font-size:12px; background-color:#a4d4a4; padding:1px 5px; border-radius:2px;'>{texts['정상범위']}</span>",
+                            unsafe_allow_html=True
+                        )
                     lgbm_container = st.container()
                     for feature in sorted_features_lgbm:
                         value = blood_values.get(feature)
@@ -1059,26 +971,24 @@ if predict_button:
                         lgbm_container.pyplot(fig)
 
                 with col_xgb:
-                    if second_model_name is not None:
-                        st.markdown(
-                            f"### {'🟢' if second_model_name == 'XGBoost' else '🟣'} {second_model_name} {texts['기준']}&nbsp;&nbsp;&nbsp; "
-                            f"<span style='font-size:12px;'><span style='color:red;'>●</span> {texts['환자수치']}</span>, "
-                            f"<span style='font-size:12px; background-color:#a4d4a4; padding:1px 5px; border-radius:3px;'> "
-                            f"{texts['정상범위']}</span>",
-                            unsafe_allow_html=True
+                    st.markdown(
+                        f"### 🟢 XGBoost {texts['기준']}&nbsp;&nbsp;&nbsp; "
+                        f"<span style='font-size:12px;'><span style='color:red;'>●</span> {texts['환자수치']}</span>, "
+                        f"<span style='font-size:12px; background-color:#a4d4a4; padding:1px 5px; border-radius:2px;'>{texts['정상범위']}</span>",
+                        unsafe_allow_html=True
+                    )
+                    xgb_container = st.container()
+                    for feature in sorted_features_xgb:
+                        value = blood_values.get(feature)
+                        fig = plot_single_variable_graph(
+                            feature=feature,
+                            value=value,
+                            normal_ranges=normal_ranges,
+                            xlim_range=custom_xlims.get(feature, (0, 400)),
+                            title_fontsize=8,
+                            tick_fontsize=6
                         )
-                        xgb_container = st.container()
-                        for feature in sorted_features_xgb:
-                            value = blood_values.get(feature)
-                            fig = plot_single_variable_graph(
-                                feature=feature,
-                                value=value,
-                                normal_ranges=normal_ranges,
-                                xlim_range=custom_xlims.get(feature, (0, 400)),
-                                title_fontsize=8,
-                                tick_fontsize=6
-                            )
-                            xgb_container.pyplot(fig)
+                        xgb_container.pyplot(fig)
 
                 for var, val in blood_values.items():
                     if var in normal_ranges:

@@ -349,7 +349,7 @@ def load_models_from_drive():
                 except Exception as e:
                     pass  # 에러 메시지 제거
 
-        return loaded_models
+    return loaded_models
 
 # ======================
 # 🔹 메인 실행 (파일 로드)

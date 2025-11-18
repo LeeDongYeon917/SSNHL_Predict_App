@@ -579,7 +579,26 @@ with st.sidebar:
         hx_others_text = st.text_input(f"{texts['기타 병력']} (Hx_others)")
         hx_others = 1 if hx_others_text.strip() != "" else 0
 
-    predict_button = st.button(f"\U0001F50D {texts['예측 결과 보기']}")
+    st.sidebar.markdown("---")
+    
+    consent_texts = {
+        "ko": "개인정보 수집 및 이용 동의",
+        "en-us": "Consent to Data Collection and Use",
+        "ja": "個人情報の収集および利用への同意",
+        "zh": "个人信息收集和使用同意",
+        "es": "Consentimiento de recopilación y uso de datos",
+        "de": "Einwilligung zur Datenerhebung und -nutzung",
+        "hi": "डेटा संग्रह और उपयोग की सहमति",
+        "ar": "الموافقة على جمع واستخدام البيانات"
+    }
+    
+    data_consent = st.checkbox(
+        consent_texts.get(lang_code, consent_texts["ko"]),
+        value=False,
+        key="data_consent"
+    )
+
+    predict_button = st.button(f"\U0001F50D {texts['예측 결과 보기']}", disabled=not data_consent)
 
 # 매핑
 side_mapping = {"Right": 1, "Left": 2}
@@ -623,6 +642,20 @@ def create_combined_image(result_df, shap_fig, title="모델 결과 요약", sum
 
 # 예측 버튼
 if predict_button:
+    if not data_consent:
+        warning_texts = {
+            "ko": "⚠️ 개인정보 수집 및 이용에 동의해주세요.",
+            "en-us": "⚠️ Please consent to data collection and use.",
+            "ja": "⚠️ 個人情報の収集および利用に同意してください。",
+            "zh": "⚠️ 请同意个人信息收集和使用。",
+            "es": "⚠️ Por favor, consienta la recopilación y uso de datos.",
+            "de": "⚠️ Bitte stimmen Sie der Datenerhebung und -nutzung zu.",
+            "hi": "⚠️ कृपया डेटा संग्रह और उपयोग के लिए सहमति दें।",
+            "ar": "⚠️ يرجى الموافقة على جمع واستخدام البيانات."
+        }
+        st.warning(warning_texts.get(lang_code, warning_texts["ko"]))
+        st.stop()
+        
     with st.spinner(f"⏳ {texts['예측 진행 중...']}"):
         df_input = pd.DataFrame([{
             "ID": id_value,

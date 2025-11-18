@@ -315,50 +315,41 @@ def load_models_from_drive():
     loaded_models = {}
 
     for hospital, paths in model_files.items():
-        loaded_models[hospital] = {}
-        for model_type, path in paths.items():
-            try:
-                content = download_file_from_drive(path)
-                if content:
-                    tmp = tempfile.NamedTemporaryFile(delete=False)
-                    tmp.write(content.read())
-                    tmp.close()
-                    # cloudpickle 먼저 시도, 실패하면 pickle, 마지막으로 joblib
-                    
-                    # scaler는 무조건 joblib로 로드
-                    if 'scaler' in model_type:
-                        try:
-                            loaded_models[hospital][model_type] = joblib.load(tmp.name)
-                            st.write(f"✅ {hospital} {model_type}: joblib 로드 성공")
-                        except Exception as e:
-                            st.write(f"❌ {hospital} {model_type}: joblib 실패: {e}")
-                    else:
-                        # 모델은 기존 방식대로
-                        try:
-                            with open(tmp.name, 'rb') as f:
-                                loaded_models[hospital][model_type] = cloudpickle.load(f)
-                            st.write(f"✅ {hospital} {model_type}: cloudpickle 로드 성공")
-                        except Exception as e1:
+            loaded_models[hospital] = {}
+            for model_type, path in paths.items():
+                try:
+                    content = download_file_from_drive(path)
+                    if content:
+                        tmp = tempfile.NamedTemporaryFile(delete=False)
+                        tmp.write(content.read())
+                        tmp.close()
+                        
+                        # scaler는 무조건 joblib로 로드
+                        if 'scaler' in model_type:
+                            try:
+                                loaded_models[hospital][model_type] = joblib.load(tmp.name)
+                            except Exception as e:
+                                pass  # 에러 발생 시 조용히 무시
+                        else:
+                            # 모델은 기존 방식대로
                             try:
                                 with open(tmp.name, 'rb') as f:
-                                    loaded_models[hospital][model_type] = pickle.load(f)
-                                st.write(f"✅ {hospital} {model_type}: pickle 로드 성공")
-                            except Exception as e2:
+                                    loaded_models[hospital][model_type] = cloudpickle.load(f)
+                            except Exception as e1:
                                 try:
-                                    loaded_models[hospital][model_type] = joblib.load(tmp.name)
-                                    st.write(f"✅ {hospital} {model_type}: joblib 로드 성공")
-                                except Exception as e3:
-                                    st.write(f"❌ {hospital} {model_type}: 모든 로드 방식 실패")
-                                    st.write(f"   cloudpickle 오류: {str(e1)[:100]}")
-                                    st.write(f"   pickle 오류: {str(e2)[:100]}")
-                                    st.write(f"   joblib 오류: {str(e3)[:100]}")
-                                    raise e3
-                else:
-                    st.warning(f"⚠️ {hospital} {model_type} 모델 없음")
-            except Exception as e:
-                st.error(f"❌ {hospital} {model_type} 로드 실패: {e}")
+                                    with open(tmp.name, 'rb') as f:
+                                        loaded_models[hospital][model_type] = pickle.load(f)
+                                except Exception as e2:
+                                    try:
+                                        loaded_models[hospital][model_type] = joblib.load(tmp.name)
+                                    except Exception as e3:
+                                        raise e3
+                    else:
+                        pass  # 경고 메시지 제거
+                except Exception as e:
+                    pass  # 에러 메시지 제거
 
-    return loaded_models
+        return loaded_models
 
 # ======================
 # 🔹 메인 실행 (파일 로드)

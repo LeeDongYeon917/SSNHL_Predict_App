@@ -496,12 +496,12 @@ selected_hospital = st.sidebar.selectbox("", list(hospital_modules.keys()))
 selected_period = None
 if selected_hospital == texts["독일하겐병원"]:
     period_options = {
-        "180일 기준": "predictors.hagen_180d",
-        "60일 기준": "predictors.hagen_60d",
-        "30일 기준": "predictors.hagen_30d"
+        texts["180일 기준"]: "predictors.hagen_180d",
+        texts["60일 기준"]: "predictors.hagen_60d",
+        texts["30일 기준"]: "predictors.hagen_30d"
     }
     st.sidebar.markdown("---")
-    st.sidebar.subheader("📅 예측 기간 선택")
+    st.sidebar.subheader(f"📅 {texts['예측 기간 선택']}")
     selected_period = st.sidebar.selectbox("", list(period_options.keys()), key="period_select")
     hospital_modules[selected_hospital] = period_options[selected_period]
 
